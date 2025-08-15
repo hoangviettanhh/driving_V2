@@ -16,31 +16,59 @@ export const TestSessionProvider = ({ children }) => {
   const [testDefinitions, setTestDefinitions] = useState([])
   const [sessionHistory, setSessionHistory] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [emergencyTestPosition, setEmergencyTestPosition] = useState(null) // 8, 9, or 10
 
-  // Load test definitions on mount
+  // Load test definitions when user is authenticated
   useEffect(() => {
-    loadTestDefinitions()
+    const token = localStorage.getItem('driving_test_token')
+    if (token) {
+      // Set token in axios headers before loading
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      loadTestDefinitions()
+    }
   }, [])
 
   // Load test definitions from backend
   const loadTestDefinitions = async () => {
     try {
       setIsLoading(true)
+      console.log('🔍 Loading test definitions...')
       const response = await axios.get('/tests')
+      console.log('✅ Test definitions response:', response.data)
       if (response.data.success) {
         setTestDefinitions(response.data.data)
+        console.log(`✅ Loaded ${response.data.data.length} test definitions`)
+      } else {
+        console.error('❌ API returned success=false:', response.data)
       }
     } catch (error) {
-      console.error('Failed to load test definitions:', error)
+      console.error('❌ Failed to load test definitions:', error.response?.status, error.response?.data)
+      // If unauthorized, clear token and redirect to login
+      if (error.response?.status === 401) {
+        localStorage.removeItem('driving_test_token')
+        delete axios.defaults.headers.common['Authorization']
+        window.location.href = '/login'
+      }
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Generate random emergency test position (before lesson 8, 9, or 10)
+  const generateEmergencyPosition = () => {
+    const positions = [8, 9, 10] // Before Đường sắt, Tăng tốc, Ghép ngang
+    return positions[Math.floor(Math.random() * positions.length)]
   }
 
   // Start new test session
   const startSession = async (studentName, studentId = '') => {
     try {
       setIsLoading(true)
+      
+      // Generate random emergency position for this session
+      const emergencyPos = generateEmergencyPosition()
+      setEmergencyTestPosition(emergencyPos)
+      console.log('🚨 Emergency test will appear before lesson:', emergencyPos)
       const response = await axios.post('/sessions', {
         student_name: studentName,
         student_id: studentId
@@ -74,6 +102,8 @@ export const TestSessionProvider = ({ children }) => {
     }
 
     try {
+      console.log('🔍 Recording error:', { testNumber, errorData, currentSession: currentSession?.id })
+      
       // Update local session state immediately for better UX
       const updatedSession = { ...currentSession }
       
@@ -82,7 +112,7 @@ export const TestSessionProvider = ({ children }) => {
       if (!testResult) {
         testResult = {
           testNumber,
-          testName: testDefinitions.find(t => t.test_number === testNumber)?.test_name || `Bài ${testNumber}`,
+          testName: testDefinitions.find(t => t.lesson_number === testNumber)?.lesson_name || `Bài ${testNumber}`,
           errorsDetected: [],
           pointsDeducted: 0,
           isDisqualified: false
@@ -108,10 +138,18 @@ export const TestSessionProvider = ({ children }) => {
       setCurrentSession(updatedSession)
 
       // Save to backend
+      console.log('🔍 Saving to backend:', {
+        sessionId: currentSession.id,
+        testResultsCount: updatedSession.testResults.length,
+        totalScore: updatedSession.totalScore
+      })
+      
       const response = await axios.put(`/sessions/${currentSession.id}`, {
         test_results: updatedSession.testResults,
         total_score: updatedSession.totalScore
       })
+      
+      console.log('✅ Backend response:', response.data)
 
       if (response.data.success) {
         return { success: true, session: updatedSession }
@@ -121,10 +159,10 @@ export const TestSessionProvider = ({ children }) => {
         return { success: false, message: response.data.error?.message || 'Không thể lưu lỗi' }
       }
     } catch (error) {
-      console.error('Failed to record error:', error)
+      console.error('❌ Failed to record error:', error.response?.status, error.response?.data, error.message)
       // Revert local changes if request fails
       setCurrentSession(currentSession)
-      return { success: false, message: 'Lỗi kết nối server' }
+      return { success: false, message: error.response?.data?.error?.message || 'Lỗi kết nối server' }
     }
   }
 
@@ -231,7 +269,19 @@ export const TestSessionProvider = ({ children }) => {
 
   // Get test definition by number
   const getTestDefinition = (testNumber) => {
-    return testDefinitions.find(test => test.test_number === testNumber)
+    const result = testDefinitions.find(test => test.lesson_number === testNumber)
+    console.log(`🔍 getTestDefinition(${testNumber}):`, result ? 'found' : 'not found', { testDefinitionsCount: testDefinitions.length })
+    return result
+  }
+
+  // Check if emergency test should appear before this lesson
+  const shouldShowEmergencyTest = (lessonNumber) => {
+    return emergencyTestPosition === lessonNumber
+  }
+
+  // Get emergency test definition
+  const getEmergencyTestDefinition = () => {
+    return getTestDefinition(12) // Emergency test is lesson 12
   }
 
   // Calculate session statistics
@@ -268,10 +318,16 @@ export const TestSessionProvider = ({ children }) => {
     completeSession,
     cancelSession,
     loadSessionHistory,
+    loadTestDefinitions, // Expose this for manual reload
     
     // Utilities
     getTestDefinition,
-    getSessionStats
+    getSessionStats,
+    
+    // Emergency test
+    emergencyTestPosition,
+    shouldShowEmergencyTest,
+    getEmergencyTestDefinition
   }
 
   return (

@@ -12,7 +12,7 @@ export const useAuth = () => {
 }
 
 // Configure axios defaults
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
 axios.defaults.baseURL = API_URL
 axios.defaults.headers.common['Accept'] = 'application/json; charset=utf-8'
 axios.defaults.headers.post['Content-Type'] = 'application/json; charset=utf-8'

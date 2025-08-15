@@ -434,6 +434,15 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
   try {
     const sessionId = req.params.id
     const { status, test_results, total_score, notes } = req.body
+    
+    console.log('🔍 PUT /api/sessions/:id - Request:', {
+      sessionId,
+      userId: req.user.id,
+      status,
+      test_results_count: test_results?.length || 0,
+      total_score,
+      notes: notes ? 'has notes' : 'no notes'
+    })
 
     // Verify session belongs to user
     const [sessions] = await db.execute(
@@ -479,12 +488,12 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
     // Save test results if provided
     if (test_results && Array.isArray(test_results)) {
       // Delete existing results for this session
-      await db.execute('DELETE FROM test_results WHERE session_id = ?', [sessionId])
+      await db.execute('DELETE FROM results WHERE session_id = ?', [sessionId])
 
       // Insert new results
       for (const result of test_results) {
         await db.execute(
-          'INSERT INTO test_results (session_id, lesson_number, test_name, errors_detected, points_deducted, is_disqualified) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO results (session_id, lesson_number, lesson_name, errors_detected, points_deducted, is_disqualified) VALUES (?, ?, ?, ?, ?, ?)',
           [
             sessionId,
             result.testNumber,
@@ -503,10 +512,16 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
     })
 
   } catch (error) {
-    console.error('Update session error:', error)
+    console.error('❌ Update session error:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      errno: error.errno,
+      sql: error.sql
+    })
     res.status(500).json({
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Failed to update session' }
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to update session', details: error.message }
     })
   }
 })

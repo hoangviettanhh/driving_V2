@@ -34,6 +34,7 @@ CREATE TABLE sessions (
     status ENUM('in_progress', 'completed', 'cancelled') DEFAULT 'in_progress',
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     notes TEXT,
     
     FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -46,7 +47,7 @@ CREATE TABLE sessions (
 CREATE TABLE results (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id INT NOT NULL,
-    lesson_number INT NOT NULL CHECK (lesson_number >= 1 AND lesson_number <= 11),
+    lesson_number INT NOT NULL CHECK (lesson_number >= 1 AND lesson_number <= 12),
     lesson_name VARCHAR(100) NOT NULL,
     errors_detected JSON,
     points_deducted INT DEFAULT 0,
@@ -61,7 +62,7 @@ CREATE TABLE results (
 -- Bảng Lessons (Định nghĩa 11 bài thi)
 CREATE TABLE lessons (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    lesson_number INT UNIQUE NOT NULL CHECK (lesson_number >= 1 AND lesson_number <= 11),
+    lesson_number INT UNIQUE NOT NULL CHECK (lesson_number >= 1 AND lesson_number <= 12),
     lesson_name VARCHAR(100) NOT NULL,
     description TEXT,
     common_errors JSON,
@@ -77,12 +78,12 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
 (1, 'Xuất phát', 'Bài thi khởi hành từ vị trí xuất phát', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Không thắt dây an toàn', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không bật xi nhan trái đúng lúc', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không tắt xi nhan trái', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Quá 20s không khởi hành', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Quá 30s không khởi hành', 'points', 100, 'type', 'disqualification')
  ), 30),
 
-(2, 'Dừng xe nhường đường cho người đi bộ', 'Dừng xe đúng vị trí để nhường đường', 
+(2, 'Dừng xe nhường đường cho người đi bộ', '', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Dừng sai vị trí (quá xa hoặc vượt vạch)', 'points', 5, 'type', 'deduction')
  ), 60),
@@ -96,8 +97,8 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
 
 (4, 'Qua vệt bánh xe', 'Điều khiển xe qua các vệt bánh xe', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Bánh xe đè vạch kẻ đường', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không giữ được hướng đi thẳng', 'points', 5, 'type', 'deduction')
+   JSON_OBJECT('error', 'Bánh xe đè vạch', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Bánh xe không đi vô vệt bánh xe', 'points', 100, 'type', 'disqualification')
  ), 120),
 
 (5, 'Qua ngã tư có đèn tín hiệu', 'Tuân thủ tín hiệu đèn giao thông', 
@@ -107,7 +108,7 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
    JSON_OBJECT('error', 'Không quan sát kỹ trước khi qua ngã tư', 'points', 5, 'type', 'deduction')
  ), 180),
 
-(6, 'Đường vòng chữ S', 'Điều khiển xe qua đường cong', 
+(6, 'Đường vòng quanh co', 'Điều khiển xe qua đường cong', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Bánh xe đè vạch biên', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Quá thời gian quy định', 'points', 5, 'type', 'deduction'),
@@ -118,13 +119,14 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
  JSON_ARRAY(
    JSON_OBJECT('error', 'Bánh xe đè vạch kẻ', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Không lùi hết vào chuồng', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Va chạm với vật cản', 'points', 100, 'type', 'disqualification')
+   JSON_OBJECT('error', 'Bánh xe leo lề', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Quá thời gian bài thi', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Lỗi bỏ bài', 'points', 100, 'type', 'disqualification')
  ), 300),
 
 (8, 'Tạm dừng đường sắt', 'Dừng xe an toàn trước đường sắt', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Dừng sai vị trí quy định', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không quan sát cẩn thận', 'points', 5, 'type', 'deduction')
  ), 60),
 
 (9, 'Tăng tốc đường bằng', 'Tăng tốc và chuyển số đúng cách', 
@@ -137,14 +139,21 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
  JSON_ARRAY(
    JSON_OBJECT('error', 'Bánh xe chèn vạch', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Không vào được vị trí đỗ xe', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Va chạm với vật cản', 'points', 100, 'type', 'disqualification')
+   JSON_OBJECT('error', 'Bánh xe leo lề', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Lỗi bỏ bài', 'points', 100, 'type', 'disqualification'),
  ), 300),
 
 (11, 'Kết thúc', 'Hoàn thành bài thi và về đích', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Không bật xi nhan phải', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không dừng đúng vị trí', 'points', 5, 'type', 'deduction')
- ), 60);
+ ), 60),
+
+(12, 'Tình huống khẩn cấp', 'Xử lý tình huống khẩn cấp trên đường', 
+ JSON_ARRAY(
+  JSON_OBJECT('error', 'Không dừng xe', 'points', 10, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không bấm nút tình huống khẩn cấp', 'points', 10, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không tắt nút tình huống khẩn cấp', 'points', 10, 'type', 'deduction')
+ ), 30);
 
 -- Insert admin user mặc định với password: password123
 INSERT INTO users (username, email, password_hash, full_name, phone) VALUES 
