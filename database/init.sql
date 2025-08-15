@@ -1,6 +1,10 @@
 -- Driving Test App Database Schema
 -- Mobile-first design cho giáo viên dạy lái xe
 
+-- Đảm bảo UTF8MB4 encoding cho Vietnamese characters
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS driving_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE driving_test;
 
@@ -67,7 +71,8 @@ CREATE TABLE lessons (
     INDEX idx_lesson_number (lesson_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert dữ liệu 11 bài thi từ Document.md
+-- Insert dữ liệu 11 bài thi từ Document.md (UTF8MB4 encoding)
+-- Đảm bảo SET NAMES utf8mb4 trước khi chạy script này
 INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max_time_seconds) VALUES
 (1, 'Xuất phát', 'Bài thi khởi hành từ vị trí xuất phát', 
  JSON_ARRAY(
@@ -84,59 +89,62 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
 
 (3, 'Dừng xe và khởi hành ngang dốc', 'Dừng xe trên dốc và khởi hành an toàn', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Không dừng đúng quy định', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không khởi hành trong 30 giây', 'points', 100, 'type', 'disqualification'),
-   JSON_OBJECT('error', 'Xe tụt dốc quá 50cm', 'points', 100, 'type', 'disqualification')
- ), 60),
+   JSON_OBJECT('error', 'Không khởi hành được trong 30s', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Xe tụt dốc quá 50cm', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Dừng sai vị trí quy định', 'points', 5, 'type', 'deduction')
+ ), 90),
 
-(4, 'Qua vệt bánh xe và đường hẹp vuông góc', 'Điều khiển xe qua các vệt bánh xe', 
+(4, 'Qua vệt bánh xe', 'Điều khiển xe qua các vệt bánh xe', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Bánh xe đè vạch giới hạn', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Đè vạch quá 5 giây', 'points', 5, 'type', 'deduction')
+   JSON_OBJECT('error', 'Bánh xe đè vạch kẻ đường', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không giữ được hướng đi thẳng', 'points', 5, 'type', 'deduction')
  ), 120),
 
-(5, 'Qua ngã tư có đèn tín hiệu', 'Tuân thủ đèn giao thông tại ngã tư', 
+(5, 'Qua ngã tư có đèn tín hiệu', 'Tuân thủ tín hiệu đèn giao thông', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Vi phạm đèn đỏ', 'points', 10, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Dừng sai vị trí', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không xi nhan khi rẽ', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Quá 20 giây từ đèn xanh', 'points', 100, 'type', 'disqualification')
- ), 60),
-
-(6, 'Đường vòng quanh co (chữ S)', 'Điều khiển xe qua đường cong hình chữ S', 
- JSON_ARRAY(
-   JSON_OBJECT('error', 'Bánh xe đè vạch giới hạn', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Quá thời gian quy định', 'points', 5, 'type', 'deduction')
- ), 120),
-
-(7, 'Ghép xe dọc vào nơi đỗ', 'Lùi xe vào khu vực đỗ xe dọc', 
- JSON_ARRAY(
-   JSON_OBJECT('error', 'Bánh xe đè vạch', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không lùi hết vào chuồng', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Ghép sai vị trí', 'points', 5, 'type', 'deduction')
+   JSON_OBJECT('error', 'Vi phạm tín hiệu đèn đỏ', 'points', 10, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Quá 20s không di chuyển khi đèn xanh', 'points', 100, 'type', 'disqualification'),
+   JSON_OBJECT('error', 'Không quan sát kỹ trước khi qua ngã tư', 'points', 5, 'type', 'deduction')
  ), 180),
 
-(8, 'Tạm dừng nơi có đường sắt chạy qua', 'Dừng xe đúng quy định tại đường sắt', 
+(6, 'Đường vòng chữ S', 'Điều khiển xe qua đường cong', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Dừng sai vị trí (quá vạch hoặc chưa đến vạch)', 'points', 5, 'type', 'deduction')
+   JSON_OBJECT('error', 'Bánh xe đè vạch biên', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Quá thời gian quy định', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không hoàn thành được bài thi', 'points', 100, 'type', 'disqualification')
+ ), 240),
+
+(7, 'Ghép xe dọc', 'Đỗ xe song song với lề đường', 
+ JSON_ARRAY(
+   JSON_OBJECT('error', 'Bánh xe đè vạch kẻ', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không lùi hết vào chuồng', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Va chạm với vật cản', 'points', 100, 'type', 'disqualification')
+ ), 300),
+
+(8, 'Tạm dừng đường sắt', 'Dừng xe an toàn trước đường sắt', 
+ JSON_ARRAY(
+   JSON_OBJECT('error', 'Dừng sai vị trí quy định', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không quan sát cẩn thận', 'points', 5, 'type', 'deduction')
  ), 60),
 
-(9, 'Thay đổi số/tăng tốc trên đường bằng', 'Vận hành hộp số và tăng tốc đúng kỹ thuật', 
+(9, 'Tăng tốc đường bằng', 'Tăng tốc và chuyển số đúng cách', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Không đổi số đúng quy định', 'points', 5, 'type', 'deduction')
- ), 60),
+   JSON_OBJECT('error', 'Không chuyển số đúng cách', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Tăng tốc không đạt yêu cầu', 'points', 5, 'type', 'deduction')
+ ), 180),
 
-(10, 'Ghép xe ngang vào nơi đỗ', 'Lùi xe vào khu vực đỗ xe ngang', 
+(10, 'Ghép xe ngang', 'Đỗ xe vuông góc với lề đường', 
  JSON_ARRAY(
    JSON_OBJECT('error', 'Bánh xe chèn vạch', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Không vào được nơi đỗ', 'points', 5, 'type', 'deduction'),
-   JSON_OBJECT('error', 'Dừng sai vị trí', 'points', 5, 'type', 'deduction')
- ), 180),
+   JSON_OBJECT('error', 'Không vào được vị trí đỗ xe', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Va chạm với vật cản', 'points', 100, 'type', 'disqualification')
+ ), 300),
 
-(11, 'Kết thúc (qua vạch đích)', 'Hoàn thành bài thi và qua vạch đích', 
+(11, 'Kết thúc', 'Hoàn thành bài thi và về đích', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Không bật xi nhan phải trước khi qua vạch', 'points', 5, 'type', 'deduction')
- ), 30);
+   JSON_OBJECT('error', 'Không bật xi nhan phải', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Không dừng đúng vị trí', 'points', 5, 'type', 'deduction')
+ ), 60);
 
 -- Insert admin user mặc định với password: password123
 INSERT INTO users (username, email, password_hash, full_name, phone) VALUES 
