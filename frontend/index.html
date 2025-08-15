@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    
+    <!-- Mobile-first viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- PWA and mobile optimization -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Driving Test" />
+    
+    <!-- SEO and description -->
+    <meta name="description" content="Ứng dụng chấm điểm thi lái xe cho giáo viên - Mobile-first design" />
+    <meta name="keywords" content="thi lái xe, chấm điểm, giáo viên, mobile app" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/car-icon.svg" />
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Inter font for better readability -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <title>Driving Test - Chấm Điểm Thi Lái Xe</title>
+    
+    <style>
+      /* Prevent flash of unstyled content */
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background-color: #f8fafc;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      
+      /* Loading spinner */
+      .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #2563eb;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* iOS safe area support */
+      @supports (padding: max(0px)) {
+        .safe-area-inset {
+          padding-left: max(16px, env(safe-area-inset-left));
+          padding-right: max(16px, env(safe-area-inset-right));
+        }
+      }
+      
+      /* Touch optimization */
+      * {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+      }
+      
+      button, a {
+        -webkit-tap-highlight-color: rgba(37, 99, 235, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- App container with safe area support -->
+    <div id="root" class="min-h-screen bg-gray-50"></div>
+    
+    <!-- Loading fallback -->
+    <noscript>
+      <div style="text-align: center; padding: 50px; font-family: Inter, sans-serif;">
+        <h2>Ứng dụng cần JavaScript để hoạt động</h2>
+        <p>Vui lòng bật JavaScript trong trình duyệt để sử dụng ứng dụng chấm điểm thi lái xe.</p>
+      </div>
+    </noscript>
+    
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,283 @@
+# Driving Test App - Cursor Rules
+
+## Project Overview
+Web application cho giáo viên dạy lái xe chấm điểm thi thử cho học viên. Mobile-first design với 11 bài thi sa hình, hệ thống chấm điểm tự động, và tính năng Text-to-Speech.
+
+## Memory Bank Usage
+CRITICAL: Always read ALL memory bank files at the start of EVERY task:
+- `memory-bank/projectbrief.md` - Foundation document, core requirements
+- `memory-bank/productContext.md` - Why project exists, user needs
+- `memory-bank/activeContext.md` - Current work focus, immediate goals
+- `memory-bank/systemPatterns.md` - Architecture, design patterns
+- `memory-bank/techContext.md` - Tech stack, database, deployment
+- `memory-bank/progress.md` - What's done, what's next, blockers
+
+## Tech Stack & Architecture
+
+### Core Technologies
+- **Frontend**: React 18+ + Vite + Tailwind CSS (mobile-first)
+- **Backend**: Node.js + Express (minimal API)
+- **Database**: MySQL 8.0
+- **Containerization**: Docker + Docker Compose
+- **Hosting**: Hostinger VPS (~79k VNĐ/tháng)
+- **Voice**: Web Speech API (Vietnamese support)
+
+### Project Structure
+```
+driving-test-app/
+├── frontend/                 # React App
+│   ├── src/
+│   │   ├── components/       # UI Components
+│   │   ├── pages/           # Route components
+│   │   ├── hooks/           # Custom hooks
+│   │   └── utils/           # Voice API, helpers
+│   ├── Dockerfile
+│   └── package.json
+├── backend/                  # Node.js API
+│   ├── routes/              # API endpoints
+│   ├── models/              # Database models
+│   ├── middleware/          # Auth, validation
+│   ├── Dockerfile
+│   └── server.js
+├── docker-compose.yml
+└── memory-bank/             # Project documentation
+```
+
+## Development Guidelines
+
+### Code Style
+- **React**: Function components với hooks, TypeScript optional
+- **CSS**: Tailwind utility classes, mobile-first responsive design
+- **API**: RESTful endpoints, JSON responses, JWT authentication
+- **Database**: Sequelize ORM hoặc raw MySQL queries
+- **Error Handling**: Try-catch blocks, meaningful error messages
+
+### Mobile-First Design Rules
+- **Touch targets**: Minimum 44px x 44px cho buttons
+- **Typography**: Minimum 16px font size
+- **Responsive**: Design cho 320px width trước, scale up
+- **Performance**: Optimize images, lazy loading, code splitting
+- **Voice UX**: Clear audio feedback, toggle controls
+
+### Component Patterns
+```jsx
+// Example TestCard component
+const TestCard = ({ test, onErrorClick, onSpeak }) => {
+  return (
+    <div className="w-full p-4 bg-white rounded-lg shadow-md mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-semibold">{test.name}</h3>
+        <button onClick={() => onSpeak(test.description)}>🔊</button>
+      </div>
+      <div className="space-y-2">
+        {test.errors.map((error, index) => (
+          <button
+            key={index}
+            onClick={() => onErrorClick(error)}
+            className="w-full text-left p-2 bg-red-50 rounded border"
+          >
+            {error.text} (-{error.points}đ)
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+## Data Structure
+
+### 11 Bài Thi Sa Hình (from Document.md)
+1. Xuất phát - Lỗi: Không thắt dây an toàn (-5đ), Không bật xi nhan (-5đ)
+2. Dừng xe nhường đường - Lỗi: Dừng sai vị trí (-5đ)
+3. Dừng xe ngang dốc - Lỗi: Không khởi hành 30s (truất quyền), Tụt dốc >50cm (truất quyền)
+4. Qua vệt bánh xe - Lỗi: Bánh xe đè vạch (-5đ/lần)
+5. Qua ngã tư có đèn - Lỗi: Vi phạm đèn đỏ (-10đ), Quá 20s (truất quyền)
+6. Đường vòng chữ S - Lỗi: Bánh xe đè vạch (-5đ/lần), Quá thời gian (-5đ)
+7. Ghép xe dọc - Lỗi: Bánh xe đè vạch (-5đ), Không lùi hết chuồng (-5đ)
+8. Tạm dừng đường sắt - Lỗi: Dừng sai vị trí (-5đ)
+9. Tăng tốc đường bằng - Lỗi: Không đổi số đúng (-5đ)
+10. Ghép xe ngang - Lỗi: Bánh xe chèn vạch (-5đ), Không vào được nơi đỗ (-5đ)
+11. Kết thúc - Lỗi: Không bật xi nhan phải (-5đ)
+
+### Scoring System
+- **Điểm khởi đầu**: 100 điểm
+- **Trừ điểm**: -5 điểm (lỗi thường), -10 điểm (nghiêm trọng)
+- **Truất quyền**: 0 điểm (lỗi cực nghiêm trọng)
+- **Đậu**: >= 80 điểm
+
+## Docker Configuration
+
+### Development Environment
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [backend]
+  
+  backend:
+    build: ./backend
+    ports: ["5000:5000"]
+    environment:
+      - DB_HOST=mysql
+    depends_on: [mysql]
+  
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: driving_test
+    ports: ["3306:3306"]
+```
+
+### Production Deployment
+- **Multi-stage builds** cho smaller images
+- **Environment variables** cho configuration
+- **Health checks** cho container monitoring
+- **Volume persistence** cho MySQL data
+
+## API Design
+
+### Authentication Endpoints
+- `POST /api/auth/register` - Đăng ký giáo viên
+- `POST /api/auth/login` - Đăng nhập
+- `GET /api/auth/profile` - Thông tin user
+
+### Test Management Endpoints
+- `GET /api/tests` - Danh sách 11 bài thi
+- `POST /api/sessions` - Tạo phiên thi mới
+- `PUT /api/sessions/:id` - Cập nhật kết quả
+- `GET /api/sessions` - Lịch sử phiên thi
+
+## Voice Integration
+
+### Web Speech API Usage
+```javascript
+const speakText = (text) => {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'vi-VN';
+    utterance.rate = 0.8;
+    speechSynthesis.speak(utterance);
+  }
+};
+```
+
+### Voice Features
+- **Test descriptions**: AI đọc tên và mô tả bài thi
+- **Error announcements**: AI đọc chi tiết lỗi khi click
+- **Score updates**: AI thông báo điểm hiện tại
+- **Controls**: Toggle on/off, volume control
+
+## Performance Requirements
+
+### Frontend Performance
+- **Page load**: < 2 seconds on mobile
+- **Bundle size**: < 500KB gzipped
+- **Image optimization**: WebP format, lazy loading
+- **Code splitting**: Route-based lazy loading
+
+### Backend Performance
+- **API response**: < 500ms for most endpoints
+- **Database queries**: Proper indexing, connection pooling
+- **Memory usage**: < 512MB per container
+- **Error handling**: Graceful degradation
+
+## Testing Strategy
+
+### Frontend Testing
+- **Component tests**: React Testing Library
+- **E2E tests**: Playwright cho mobile workflows
+- **Voice tests**: Manual testing trên real devices
+- **Accessibility**: Screen reader compatibility
+
+### Backend Testing
+- **Unit tests**: Jest cho business logic
+- **Integration tests**: API endpoint testing
+- **Database tests**: MySQL query validation
+- **Load tests**: Performance under concurrent users
+
+## Deployment Checklist
+
+### Pre-deployment
+- [ ] All tests passing
+- [ ] Docker images built successfully
+- [ ] Environment variables configured
+- [ ] Database migrations ready
+- [ ] SSL certificates prepared
+
+### Production Setup
+- [ ] Hostinger VPS configured
+- [ ] Docker Compose production file
+- [ ] Nginx reverse proxy setup
+- [ ] MySQL backup strategy
+- [ ] Monitoring và logging setup
+
+## Common Patterns
+
+### Error Handling
+```javascript
+// Frontend error boundary
+const ErrorBoundary = ({ children }) => {
+  // Handle React errors gracefully
+};
+
+// Backend error middleware
+const errorHandler = (err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    error: { message: 'Something went wrong' }
+  });
+};
+```
+
+### State Management
+```javascript
+// React Context for global state
+const AppContext = createContext();
+
+const AppProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [currentSession, setCurrentSession] = useState(null);
+  
+  return (
+    <AppContext.Provider value={{ user, currentSession, setUser, setCurrentSession }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+```
+
+## Security Considerations
+
+### Authentication Security
+- JWT tokens với reasonable expiration
+- Password hashing với bcrypt
+- CORS configuration cho production
+- Rate limiting cho API endpoints
+
+### Input Validation
+- Joi schemas cho API validation
+- XSS protection với proper escaping
+- SQL injection prevention với parameterized queries
+- File upload restrictions (nếu có)
+
+## Monitoring & Maintenance
+
+### Application Monitoring
+- Error tracking với structured logging
+- Performance metrics collection
+- Database query monitoring
+- User activity logging
+
+### Maintenance Tasks
+- Regular database backups
+- Docker image updates
+- Security patch applications
+- Performance optimization reviews
+
+Always follow these rules và refer to memory bank files for detailed context. Update memory bank khi có significant changes hoặc new learnings.

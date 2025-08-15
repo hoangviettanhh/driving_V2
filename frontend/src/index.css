@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-first base styles */
+@layer base {
+  html {
+    font-size: 16px; /* Ensure minimum readable font size on mobile */
+    -webkit-text-size-adjust: 100%; /* Prevent iOS font scaling */
+  }
+  
+  body {
+    @apply font-sans antialiased;
+    @apply text-gray-900 bg-gray-50;
+    @apply leading-relaxed;
+    /* iOS momentum scrolling */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent horizontal scroll */
+    overflow-x: hidden;
+  }
+  
+  /* Better focus styles for accessibility */
+  *:focus {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+  
+  /* Touch-friendly interactive elements */
+  button, 
+  input, 
+  select, 
+  textarea,
+  [role="button"] {
+    @apply min-h-touch; /* 44px minimum touch target */
+  }
+  
+  /* Smooth scrolling for better UX */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Component layer for reusable patterns */
+@layer components {
+  /* Mobile-first button styles */
+  .btn {
+    @apply inline-flex items-center justify-center;
+    @apply px-4 py-3 rounded-mobile font-medium;
+    @apply transition-all duration-200;
+    @apply min-h-touch; /* Touch-friendly */
+    @apply focus:ring-2 focus:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-600 text-white;
+    @apply hover:bg-primary-700 focus:ring-primary-500;
+    @apply active:bg-primary-800;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-900;
+    @apply hover:bg-gray-300 focus:ring-gray-500;
+  }
+  
+  .btn-success {
+    @apply btn bg-success-600 text-white;
+    @apply hover:bg-success-700 focus:ring-success-500;
+  }
+  
+  .btn-danger {
+    @apply btn bg-danger-600 text-white;
+    @apply hover:bg-danger-700 focus:ring-danger-500;
+  }
+  
+  .btn-outline {
+    @apply btn border-2 border-primary-600 text-primary-600 bg-transparent;
+    @apply hover:bg-primary-50 focus:ring-primary-500;
+  }
+  
+  /* Mobile-optimized form inputs */
+  .form-input {
+    @apply w-full px-4 py-3 rounded-mobile border border-gray-300;
+    @apply bg-white text-base; /* 16px prevents zoom on iOS */
+    @apply focus:border-primary-500 focus:ring-1 focus:ring-primary-500;
+    @apply placeholder-gray-400;
+    @apply transition-colors duration-200;
+  }
+  
+  /* Card component for mobile */
+  .card {
+    @apply bg-white rounded-card shadow-card;
+    @apply border border-gray-100;
+    @apply overflow-hidden;
+  }
+  
+  .card-header {
+    @apply px-4 py-4 border-b border-gray-100;
+    @apply bg-gray-50;
+  }
+  
+  .card-body {
+    @apply p-4;
+  }
+  
+  .card-footer {
+    @apply px-4 py-4 border-t border-gray-100;
+    @apply bg-gray-50;
+  }
+  
+  /* Test card specific styles */
+  .test-card {
+    @apply card mb-4;
+    @apply hover:shadow-floating transition-shadow duration-200;
+  }
+  
+  .test-card-header {
+    @apply flex items-center justify-between p-4;
+    @apply bg-gradient-to-r from-primary-50 to-blue-50;
+  }
+  
+  .test-card-title {
+    @apply text-lg font-semibold text-gray-900;
+    @apply truncate flex-1 mr-2;
+  }
+  
+  .test-card-number {
+    @apply inline-flex items-center justify-center;
+    @apply w-8 h-8 rounded-full;
+    @apply bg-primary-600 text-white text-sm font-bold;
+  }
+  
+  /* Error list styles */
+  .error-item {
+    @apply flex items-center justify-between;
+    @apply p-3 rounded-lg border border-danger-200;
+    @apply bg-danger-50 hover:bg-danger-100;
+    @apply transition-colors duration-200;
+    @apply cursor-pointer;
+  }
+  
+  .error-text {
+    @apply text-danger-800 font-medium flex-1;
+  }
+  
+  .error-points {
+    @apply text-danger-600 font-bold;
+    @apply bg-danger-200 px-2 py-1 rounded;
+    @apply text-sm;
+  }
+  
+  /* Score display */
+  .score-display {
+    @apply text-center p-6 rounded-card;
+    @apply bg-gradient-to-br from-primary-500 to-blue-600;
+    @apply text-white shadow-floating;
+  }
+  
+  .score-number {
+    @apply text-4xl font-bold mb-2;
+  }
+  
+  .score-label {
+    @apply text-primary-100 text-sm uppercase tracking-wide;
+  }
+  
+  /* Voice button */
+  .voice-btn {
+    @apply inline-flex items-center justify-center;
+    @apply w-12 h-12 rounded-full;
+    @apply bg-primary-100 hover:bg-primary-200;
+    @apply text-primary-600 hover:text-primary-700;
+    @apply transition-all duration-200;
+    @apply focus:ring-2 focus:ring-primary-500;
+  }
+  
+  /* Loading states */
+  .loading-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50;
+    @apply flex items-center justify-center z-50;
+  }
+  
+  .loading-spinner {
+    @apply w-8 h-8 border-4 border-white border-t-transparent;
+    @apply rounded-full animate-spin;
+  }
+}
+
+/* Utility layer for custom utilities */
+@layer utilities {
+  /* Safe area utilities for iOS */
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Mobile-specific utilities */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  .prevent-zoom {
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+  
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  /* Gradient utilities */
+  .gradient-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  }
+  
+  .gradient-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  }
+  
+  .gradient-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  }
+}
+
+/* Mobile-specific media queries */
+@media (max-width: 375px) {
+  /* Extra small phones */
+  .text-responsive {
+    @apply text-sm;
+  }
+  
+  .btn {
+    @apply text-sm px-3 py-2;
+  }
+}
+
+@media (min-width: 768px) {
+  /* Tablet and desktop adjustments */
+  .container-responsive {
+    @apply max-w-md mx-auto;
+  }
+}
+
+/* Dark mode support (future enhancement) */
+@media (prefers-color-scheme: dark) {
+  /* Dark mode styles can be added here */
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .btn-primary {
+    @apply border-2 border-white;
+  }
+  
+  .card {
+    @apply border-2 border-gray-400;
+  }
+}

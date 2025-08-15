@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # Frontend - React App
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3020:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+    networks:
+      - driving-test-network
+
+  # Backend - Node.js API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=driving_test_password
+      - DB_NAME=driving_test
+      - JWT_SECRET=driving_test_jwt_secret_key_2024
+      - PORT=5000
+    depends_on:
+      - mysql
+    networks:
+      - driving-test-network
+
+  # Database - MySQL
+  mysql:
+    image: mysql:8.0
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: driving_test_password
+      MYSQL_DATABASE: driving_test
+      MYSQL_USER: driving_user
+      MYSQL_PASSWORD: driving_test_password
+    ports:
+      - "3315:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - driving-test-network
+
+volumes:
+  mysql_data:
+
+networks:
+  driving-test-network:
+    driver: bridge
