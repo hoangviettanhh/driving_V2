@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useVoice } from '../contexts/VoiceContext'
 import { useTestSession } from '../contexts/TestSessionContext'
-import { Plus, Play, History, Users, Trophy, Clock } from 'lucide-react'
+import { Plus, Play, History, Users, Trophy, Clock, Settings } from 'lucide-react'
+import VoiceTestComponent from '../components/VoiceTestComponent'
 
 const DashboardPage = () => {
   const { user } = useAuth()
   const { speakWelcome } = useVoice()
   const { currentSession, sessionHistory, loadSessionHistory } = useTestSession()
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false)
 
   // Welcome message on load
   useEffect(() => {
@@ -200,6 +202,24 @@ const DashboardPage = () => {
               Xem tất cả →
             </Link>
           )}
+        </div>
+      )}
+
+      {/* Voice Settings Button */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowVoiceSettings(!showVoiceSettings)}
+          className="w-full flex items-center justify-center space-x-2 p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
+        >
+          <Settings className="w-5 h-5" />
+          <span>{showVoiceSettings ? 'Ẩn cài đặt giọng đọc' : 'Cài đặt giọng đọc'}</span>
+        </button>
+      </div>
+
+      {/* Voice Test Component */}
+      {showVoiceSettings && (
+        <div className="mt-4">
+          <VoiceTestComponent />
         </div>
       )}
     </div>

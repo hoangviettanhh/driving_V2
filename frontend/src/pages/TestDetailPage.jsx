@@ -32,26 +32,73 @@ const TestDetailPage = () => {
   const [testPhase, setTestPhase] = useState('loading') // loading -> animation -> speaking -> ready
   const [animationComplete, setAnimationComplete] = useState(false)
   const [showEmergencyTest, setShowEmergencyTest] = useState(false)
+  const [isRecordingError, setIsRecordingError] = useState(false)
+  const [localScore, setLocalScore] = useState(100) // Local score tracking
+  const [detectedErrors, setDetectedErrors] = useState([]) // Local error tracking
+  
+  // Timer states
+  const [examStartTime, setExamStartTime] = useState(null) // When exam started
+  const [currentTime, setCurrentTime] = useState(Date.now()) // Current time for timer
+  const [isOvertime, setIsOvertime] = useState(false) // Whether in overtime
+  const [overtimePenalties, setOvertimePenalties] = useState(0) // Number of overtime penalties
   
   // Get current test definition
   const currentTest = getTestDefinition(currentTestNumber)
   const sessionStats = getSessionStats()
   
-  // Debug logs
+  // Component initialization - Start exam timer
   useEffect(() => {
-    console.log('🔍 TestDetailPage mounted:', {
-      currentTestNumber,
-      hasCurrentSession: !!currentSession,
-      hasCurrentTest: !!currentTest,
-      testDefinitionsCount: testDefinitions.length,
-      testPhase
-    })
-  }, [currentTestNumber, currentSession, currentTest, testDefinitions.length, testPhase])
+    // Start exam timer when first entering any test
+    if (currentSession && !examStartTime) {
+      const startTime = Date.now()
+      setExamStartTime(startTime)
+      console.log('⏰ Exam timer started at:', new Date(startTime).toLocaleTimeString())
+    }
+  }, [currentSession, examStartTime])
+
+  // Timer logic - Update every second and handle overtime
+  useEffect(() => {
+    if (!examStartTime) return
+
+    const timer = setInterval(() => {
+      const now = Date.now()
+      setCurrentTime(now)
+      
+      const elapsedMs = now - examStartTime
+      const elapsedMinutes = elapsedMs / (1000 * 60)
+      const EXAM_DURATION_MINUTES = 18
+      
+      if (elapsedMinutes > EXAM_DURATION_MINUTES && !isOvertime) {
+        setIsOvertime(true)
+        speak('Đã hết thời gian thi. Bắt đầu tính phạt quá giờ.')
+      }
+      
+      // Overtime penalty every 3 seconds
+      if (isOvertime) {
+        const overtimeMs = elapsedMs - (EXAM_DURATION_MINUTES * 60 * 1000)
+        const overtimeSeconds = Math.floor(overtimeMs / 1000)
+        const expectedPenalties = Math.floor(overtimeSeconds / 3)
+        
+        if (expectedPenalties > overtimePenalties) {
+          const newPenalties = expectedPenalties - overtimePenalties
+          setOvertimePenalties(expectedPenalties)
+          
+          // Deduct points and speak
+          const newScore = Math.max(0, localScore - newPenalties)
+          setLocalScore(newScore)
+          
+          speak('Quá thời gian')
+          console.log('⏰ Overtime penalty:', newPenalties, 'points. New score:', newScore)
+        }
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [examStartTime, isOvertime, overtimePenalties, localScore, speak])
 
   // Load test definitions if not available
   useEffect(() => {
     if (testDefinitions.length === 0) {
-      console.log('🔄 TestDetailPage: Loading test definitions...')
       loadTestDefinitions()
     }
   }, [])
@@ -80,7 +127,6 @@ const TestDetailPage = () => {
     // Check if emergency test should appear before this lesson
     if (shouldShowEmergencyTest(currentTestNumber)) {
       setShowEmergencyTest(true)
-      console.log('🚨 Emergency test will appear before lesson', currentTestNumber)
     }
   }, [currentTestNumber, shouldShowEmergencyTest])
 
@@ -100,12 +146,10 @@ const TestDetailPage = () => {
         }, 3000)
       }
     }
-  }, [currentTest, currentSession, testPhase, currentTestNumber, speak, showEmergencyTest])
+  }, [currentTest, testPhase, currentTestNumber, speak, showEmergencyTest])
   
   // Handle emergency test completion
   const handleEmergencyTestComplete = (pointsAwarded) => {
-    console.log('🚨 Emergency test completed')
-    
     // Hide emergency test and continue with normal lesson
     setShowEmergencyTest(false)
     setTestPhase('loading')
@@ -113,10 +157,16 @@ const TestDetailPage = () => {
 
   // Redirect if no active session
   useEffect(() => {
-    if (!currentSession) {
-      navigate('/tests')
+    if (!currentSession && !isRecordingError) {
+      const timer = setTimeout(() => {
+        if (!currentSession && !isRecordingError) {
+          navigate('/tests')
+        }
+      }, 2000)
+      
+      return () => clearTimeout(timer)
     }
-  }, [currentSession, navigate])
+  }, [currentSession, navigate, isRecordingError])
   
   // Show emergency test if needed
   if (showEmergencyTest) {
@@ -249,37 +299,29 @@ const TestDetailPage = () => {
   }
   
   // Handle error click
-  const handleErrorClick = async (error) => {
+  const handleErrorClick = (event, error) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    
     if (isProcessing) return
     
-    setIsProcessing(true)
-    try {
-      const result = await recordError(currentTestNumber, {
-        error: error.error,
-        points: error.points,
-        type: error.type
-      })
-      
-      if (result.success) {
-        // Speak error and new score
-        await speakError(error.error, error.points)
-        await speakScore(result.session.totalScore)
-        
-        // Check for disqualification
-        if (error.type === 'disqualification') {
-          setTimeout(() => {
-            alert(`Bài thi đã bị truất quyền do: ${error.error}`)
-          }, 1000)
-        }
-      } else {
-        alert(result.message || 'Không thể ghi nhận lỗi')
-      }
-    } catch (error) {
-      console.error('Error recording:', error)
-      alert('Đã xảy ra lỗi khi ghi nhận lỗi')
-    } finally {
-      setIsProcessing(false)
+    // Check if already detected
+    const alreadyDetected = detectedErrors.some(e => e.error === error.error)
+    if (alreadyDetected) {
+      speak('Lỗi này đã được ghi nhận')
+      return
     }
+    
+    // Add to detected errors locally
+    setDetectedErrors(prev => [...prev, error])
+    
+    // Deduct points locally
+    const newScore = Math.max(0, localScore - error.points)
+    setLocalScore(newScore)
+    
+    // Speak error and new score
+    speak(`${error.error}. Trừ ${error.points} điểm. Điểm hiện tại: ${newScore}`)
+      .catch(() => {}) // Ignore voice errors
   }
   
   // Handle next test
@@ -293,22 +335,28 @@ const TestDetailPage = () => {
         const result = await completeTest(currentTestNumber)
         if (result.success) {
           navigate(`/test/${currentTestNumber + 1}`)
-          // Speak next test name
-          const nextTest = getTestDefinition(currentTestNumber + 1)
-          if (nextTest) {
-            speak(`Chuyển sang ${nextTest.lesson_name}`)
-          }
+          // No voice during transition - will speak when entering new test
         }
       } else {
-        // Complete entire session
-        const result = await completeSession()
-        if (result.success) {
-          const finalStats = getSessionStats(result.session)
-          speak(`Hoàn thành bài thi. Điểm cuối cùng: ${finalStats.finalScore}. ${finalStats.isPassed ? 'Chúc mừng bạn đã đậu' : 'Rất tiếc bạn đã rớt'}`)
-          navigate('/history')
-        } else {
-          alert(result.message || 'Không thể hoàn thành phiên thi')
+        // Complete entire session with local score
+        const sessionWithLocalData = {
+          ...currentSession,
+          totalScore: localScore,
+          testResults: [{
+            testNumber: currentTestNumber,
+            testName: currentTest?.lesson_name || `Bài ${currentTestNumber}`,
+            errorsDetected: detectedErrors,
+            pointsDeducted: 100 - localScore,
+            isDisqualified: localScore === 0
+          }]
         }
+        
+        // Navigate to result page with local session data
+        navigate('/result', { 
+          state: { 
+            session: sessionWithLocalData
+          } 
+        })
       }
     } catch (error) {
       console.error('Error completing test:', error)
@@ -335,11 +383,64 @@ const TestDetailPage = () => {
   const testPointsDeducted = currentTestResult ? currentTestResult.pointsDeducted : 0
   const testErrorsDetected = currentTestResult ? currentTestResult.errorsDetected : []
   
+  // Calculate timer display - COUNT UP from 00:00
+  const getTimerDisplay = () => {
+    if (!examStartTime) return { display: '00:00', isOvertime: false, overtimeDisplay: '' }
+    
+    const elapsedMs = currentTime - examStartTime
+    const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60))
+    const elapsedSeconds = Math.floor((elapsedMs % (1000 * 60)) / 1000)
+    const EXAM_DURATION_MINUTES = 18
+    
+    const timeDisplay = `${elapsedMinutes.toString().padStart(2, '0')}:${elapsedSeconds.toString().padStart(2, '0')}`
+    
+    if (elapsedMinutes < EXAM_DURATION_MINUTES) {
+      // Normal time - show elapsed time (counting up)
+      return {
+        display: timeDisplay,
+        isOvertime: false,
+        overtimeDisplay: ''
+      }
+    } else {
+      // Overtime - show elapsed time in red
+      return {
+        display: timeDisplay,
+        isOvertime: true,
+        overtimeDisplay: `(Quá ${elapsedMinutes - EXAM_DURATION_MINUTES} phút)`
+      }
+    }
+  }
+  
+  const timerInfo = getTimerDisplay()
+  
   // Ready phase - show test interface with errors
   return (
     <div className="p-4 space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="space-y-4">
+        {/* Timer Display - COUNT UP */}
+        <div className={`text-center p-3 rounded-lg font-mono text-lg font-bold ${
+          timerInfo.isOvertime 
+            ? 'bg-red-100 text-red-700 border-2 border-red-300 animate-pulse' 
+            : 'bg-green-100 text-green-700 border-2 border-green-300'
+        }`}>
+          <div className="flex items-center justify-center space-x-2">
+            <span>⏰</span>
+            <span>{timerInfo.display}</span>
+            <span className="text-sm font-normal">/ 18:00</span>
+            {timerInfo.isOvertime && (
+              <span className="text-red-600 text-sm">
+                {timerInfo.overtimeDisplay}
+              </span>
+            )}
+          </div>
+          {timerInfo.isOvertime && (
+            <div className="text-sm mt-1 text-red-600 font-medium">
+              ⚠️ Quá giờ! Trừ 1 điểm mỗi 3 giây (Đã trừ: {overtimePenalties} điểm)
+            </div>
+          )}
+        </div>
+        
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="test-card-number bg-primary-600">
@@ -386,23 +487,23 @@ const TestDetailPage = () => {
         </div>
       </div>
       
-      {/* Score Display */}
+      {/* Score Display - LOCAL VERSION */}
       <div className="grid grid-cols-2 gap-4">
         <div className="card bg-primary-50 border-primary-200">
           <div className="card-body text-center">
             <div className="text-3xl font-bold text-primary-900 mb-1">
-              {currentSession.totalScore}
+              {localScore}
             </div>
             <div className="text-sm text-primary-700">Điểm hiện tại</div>
           </div>
         </div>
         
-        <div className="card bg-gray-50">
+        <div className="card bg-orange-50 border-orange-200">
           <div className="card-body text-center">
-            <div className="text-3xl font-bold text-gray-900 mb-1">
-              -{testPointsDeducted}
+            <div className="text-3xl font-bold text-orange-900 mb-1">
+              {detectedErrors.length}
             </div>
-            <div className="text-sm text-gray-600">Điểm bị trừ bài này</div>
+            <div className="text-sm text-orange-600">Lỗi đã phát hiện</div>
           </div>
         </div>
       </div>
@@ -471,12 +572,13 @@ const TestDetailPage = () => {
           <div className="grid gap-3">
             {currentTestErrors.map((error, index) => {
               const isDisqualification = error.type === 'disqualification'
-              const alreadyDetected = testErrorsDetected.some(detected => detected.error === error.error)
+              const alreadyDetected = detectedErrors.some(detected => detected.error === error.error)
               
               return (
                 <button
                   key={index}
-                  onClick={() => handleErrorClick(error)}
+                  type="button"
+                  onClick={(event) => handleErrorClick(event, error)}
                   disabled={isProcessing || alreadyDetected}
                   className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
                     alreadyDetected

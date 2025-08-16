@@ -110,7 +110,7 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
 
 (6, 'Đường vòng quanh co', 'Điều khiển xe qua đường cong', 
  JSON_ARRAY(
-   JSON_OBJECT('error', 'Bánh xe đè vạch biên', 'points', 5, 'type', 'deduction'),
+   JSON_OBJECT('error', 'Bánh xe đè vạch', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Quá thời gian quy định', 'points', 5, 'type', 'deduction'),
    JSON_OBJECT('error', 'Không hoàn thành được bài thi', 'points', 100, 'type', 'disqualification')
  ), 240),
@@ -153,11 +153,14 @@ INSERT INTO lessons (lesson_number, lesson_name, description, common_errors, max
   JSON_OBJECT('error', 'Không dừng xe', 'points', 10, 'type', 'deduction'),
    JSON_OBJECT('error', 'Không bấm nút tình huống khẩn cấp', 'points', 10, 'type', 'deduction'),
    JSON_OBJECT('error', 'Không tắt nút tình huống khẩn cấp', 'points', 10, 'type', 'deduction')
- ), 30);
+ ), 300);
 
 -- Insert admin user mặc định với password: password123
 INSERT INTO users (username, email, password_hash, full_name, phone) VALUES 
 ('admin', 'admin@drivingtest.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewKyNiDCHOgLgdKu', 'Quản trị viên', '0123456789');
+
+-- Đảm bảo cột updated_at tồn tại trong bảng sessions (fix lỗi session update)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
 
 -- Tạo indexes cho performance
 CREATE INDEX idx_results_session_lesson ON results(session_id, lesson_number);

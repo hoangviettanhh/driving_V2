@@ -16,7 +16,7 @@ export const VoiceProvider = ({ children }) => {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [voices, setVoices] = useState([])
   const [selectedVoice, setSelectedVoice] = useState(null)
-  const [rate, setRate] = useState(0.8) // Slower for clarity
+  const [rate, setRate] = useState(1.1) // Slightly faster for better UX
   const [pitch, setPitch] = useState(1)
   const [volume, setVolume] = useState(0.8)
 
@@ -43,19 +43,45 @@ export const VoiceProvider = ({ children }) => {
     const availableVoices = speechSynthesis.getVoices()
     setVoices(availableVoices)
     
-    // Try to find Vietnamese voice
-    const vietnameseVoice = availableVoices.find(voice => 
-      voice.lang.startsWith('vi') || 
-      voice.name.toLowerCase().includes('vietnam') ||
-      voice.name.toLowerCase().includes('vietnamese')
+    console.log('🎤 Available voices:', availableVoices.map(v => `${v.name} (${v.lang}) - ${v.gender || 'unknown'}`))
+    
+    // Priority 1: Vietnamese female voice
+    let bestVoice = availableVoices.find(voice => 
+      (voice.lang.startsWith('vi') || voice.name.toLowerCase().includes('vietnam')) &&
+      (voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('woman') || voice.name.toLowerCase().includes('nữ'))
     )
     
-    if (vietnameseVoice) {
-      setSelectedVoice(vietnameseVoice)
-    } else {
-      // Fallback to default voice
-      const defaultVoice = availableVoices.find(voice => voice.default) || availableVoices[0]
-      setSelectedVoice(defaultVoice)
+    // Priority 2: Any Vietnamese voice
+    if (!bestVoice) {
+      bestVoice = availableVoices.find(voice => 
+        voice.lang.startsWith('vi') || 
+        voice.name.toLowerCase().includes('vietnam') ||
+        voice.name.toLowerCase().includes('vietnamese')
+      )
+    }
+    
+    // Priority 3: Any female voice (English is ok for Vietnamese text)
+    if (!bestVoice) {
+      bestVoice = availableVoices.find(voice => 
+        voice.name.toLowerCase().includes('female') || 
+        voice.name.toLowerCase().includes('woman') ||
+        voice.name.toLowerCase().includes('zira') ||
+        voice.name.toLowerCase().includes('hazel') ||
+        voice.name.toLowerCase().includes('samantha') ||
+        voice.name.toLowerCase().includes('anna') ||
+        voice.name.toLowerCase().includes('karen') ||
+        voice.name.toLowerCase().includes('tessa')
+      )
+    }
+    
+    // Priority 4: Default voice
+    if (!bestVoice) {
+      bestVoice = availableVoices.find(voice => voice.default) || availableVoices[0]
+    }
+    
+    if (bestVoice) {
+      console.log('🎤 Selected voice:', bestVoice.name, '(' + bestVoice.lang + ')')
+      setSelectedVoice(bestVoice)
     }
   }, [])
 

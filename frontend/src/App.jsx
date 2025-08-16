@@ -10,6 +10,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TestListPage from './pages/TestListPage'
 import TestDetailPage from './pages/TestDetailPage'
+import TestResultPage from './pages/TestResultPage'
 import ScoreHistoryPage from './pages/ScoreHistoryPage'
 
 // Import layout components
@@ -49,6 +50,12 @@ function App() {
                   <Layout>
                     <TestDetailPage />
                   </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/result" element={
+                <ProtectedRoute>
+                  <TestResultPage />
                 </ProtectedRoute>
               } />
               
