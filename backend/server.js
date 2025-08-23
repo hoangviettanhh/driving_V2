@@ -51,7 +51,13 @@ app.set('trust proxy', true) // Trust proxy for correct IP detection
 app.use(helmet())
 app.use(compression())
 app.use(cors({
-  origin: ['http://localhost:3020', 'http://localhost:5173', 'http://localhost:3000'],
+  origin: [
+    'http://localhost:3020', 
+    'http://localhost:5173', 
+    'http://localhost:3000',
+    'https://frontend-production-947a.up.railway.app',
+    'https://driving.vn'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
