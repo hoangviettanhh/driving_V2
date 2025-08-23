@@ -174,10 +174,6 @@ export const TestSessionProvider = ({ children }) => {
       setCurrentSession(updatedSession)
 
       // Save to backend
-        sessionId: currentSession.id,
-        testResultsCount: updatedSession.testResults.length,
-        totalScore: updatedSession.totalScore
-      })
       
       const response = await axios.put(`/sessions/${currentSession.id}`, {
         test_results: updatedSession.testResults,
