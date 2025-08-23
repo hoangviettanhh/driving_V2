@@ -12,6 +12,9 @@ import TestListPage from './pages/TestListPage'
 import TestDetailPage from './pages/TestDetailPage'
 import TestResultPage from './pages/TestResultPage'
 import ScoreHistoryPage from './pages/ScoreHistoryPage'
+import SettingsPage from './pages/SettingsPage'
+import VoiceSettingsPage from './pages/VoiceSettingsPage'
+import UserManagementPage from './pages/UserManagementPage'
 
 // Import layout components
 import Layout from './components/Layout/Layout'
@@ -64,6 +67,24 @@ function App() {
                   <Layout>
                     <ScoreHistoryPage />
                   </Layout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/settings/voice" element={
+                <ProtectedRoute>
+                  <VoiceSettingsPage />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/settings/users" element={
+                <ProtectedRoute>
+                  <UserManagementPage />
                 </ProtectedRoute>
               } />
               

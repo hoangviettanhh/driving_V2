@@ -16,7 +16,7 @@ export const TestSessionProvider = ({ children }) => {
   const [testDefinitions, setTestDefinitions] = useState([])
   const [sessionHistory, setSessionHistory] = useState([])
   const [isLoading, setIsLoading] = useState(false)
-  const [emergencyTestPosition, setEmergencyTestPosition] = useState(null) // 8, 9, or 10
+  const [isEmergencyTestActive, setIsEmergencyTestActive] = useState(false) // Manual trigger
 
   // Load test definitions when user is authenticated
   useEffect(() => {
@@ -32,14 +32,22 @@ export const TestSessionProvider = ({ children }) => {
   const loadTestDefinitions = async () => {
     try {
       setIsLoading(true)
-      console.log('🔍 Loading test definitions...')
       const response = await axios.get('/tests')
-      console.log('✅ Test definitions response:', response.data)
-      if (response.data.success) {
-        setTestDefinitions(response.data.data)
-        console.log(`✅ Loaded ${response.data.data.length} test definitions`)
+      if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        // Validate and sanitize test definitions
+        const validTestDefinitions = response.data.data.map(test => ({
+          ...test,
+          id: test.id || test.lesson_number,
+          lesson_number: Number(test.lesson_number) || 1,
+          lesson_name: test.lesson_name || 'Bài thi',
+          description: test.description || '',
+          time_limit: Number(test.time_limit) || 300,
+          common_errors: test.common_errors || '[]'
+        }))
+        setTestDefinitions(validTestDefinitions)
       } else {
-        console.error('❌ API returned success=false:', response.data)
+        console.error('❌ API returned invalid data:', response.data)
+        setTestDefinitions([])
       }
     } catch (error) {
       console.error('❌ Failed to load test definitions:', error.response?.status, error.response?.data)
@@ -49,15 +57,28 @@ export const TestSessionProvider = ({ children }) => {
         delete axios.defaults.headers.common['Authorization']
         window.location.href = '/login'
       }
+      // Set empty array on error to prevent crashes
+      setTestDefinitions([])
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Generate random emergency test position (before lesson 8, 9, or 10)
-  const generateEmergencyPosition = () => {
-    const positions = [8, 9, 10] // Before Đường sắt, Tăng tốc, Ghép ngang
-    return positions[Math.floor(Math.random() * positions.length)]
+  // Trigger emergency test manually - PREVENT MULTIPLE TRIGGERS
+  const triggerEmergencyTest = () => {
+    if (isEmergencyTestActive) {
+      return
+    }
+    setIsEmergencyTestActive(true)
+  }
+
+  // Complete emergency test
+  const completeEmergencyTest = () => {
+    setIsEmergencyTestActive(false)
+    
+    // Add small delay to prevent immediate re-trigger
+    setTimeout(() => {
+    }, 1000)
   }
 
   // Start new test session
@@ -65,18 +86,31 @@ export const TestSessionProvider = ({ children }) => {
     try {
       setIsLoading(true)
       
-      // Generate random emergency position for this session
-      const emergencyPos = generateEmergencyPosition()
-      setEmergencyTestPosition(emergencyPos)
-      console.log('🚨 Emergency test will appear before lesson:', emergencyPos)
+      // Validate input
+      if (!studentName || typeof studentName !== 'string' || studentName.trim().length === 0) {
+        return { success: false, message: 'Tên học viên không hợp lệ' }
+      }
+      
+      // Clear any existing completed session first
+      if (currentSession && currentSession.isCompleted) {
+        setCurrentSession(null)
+      }
+      
+      // Reset emergency test state for new session
+      setIsEmergencyTestActive(false)
       const response = await axios.post('/sessions', {
-        student_name: studentName,
-        student_id: studentId
+        student_name: studentName.trim(),
+        student_id: studentId ? studentId.trim() : ''
       })
 
-      if (response.data.success) {
+      if (response.data && response.data.success && response.data.data) {
         const newSession = {
-          ...response.data.data,
+          id: response.data.data.id,
+          student_name: response.data.data.student_name || studentName.trim(),
+          student_id: response.data.data.student_id || studentId.trim(),
+          instructor_id: response.data.data.instructor_id,
+          status: response.data.data.status || 'in_progress',
+          started_at: response.data.data.started_at || new Date().toISOString(),
           testResults: [],
           currentTestNumber: 1,
           totalScore: 100,
@@ -85,11 +119,14 @@ export const TestSessionProvider = ({ children }) => {
         setCurrentSession(newSession)
         return { success: true, session: newSession }
       } else {
-        return { success: false, message: response.data.error?.message || 'Không thể tạo phiên thi' }
+        const errorMessage = response.data?.error?.message || 'Không thể tạo phiên thi'
+        console.error('Start session failed:', response.data)
+        return { success: false, message: errorMessage }
       }
     } catch (error) {
-      console.error('Failed to start session:', error)
-      return { success: false, message: 'Lỗi kết nối server' }
+      console.error('Failed to start session:', error.response?.data || error.message)
+      const errorMessage = error.response?.data?.error?.message || 'Lỗi kết nối server'
+      return { success: false, message: errorMessage }
     } finally {
       setIsLoading(false)
     }
@@ -102,7 +139,6 @@ export const TestSessionProvider = ({ children }) => {
     }
 
     try {
-      console.log('🔍 Recording error:', { testNumber, errorData, currentSession: currentSession?.id })
       
       // Update local session state immediately for better UX
       const updatedSession = { ...currentSession }
@@ -138,7 +174,6 @@ export const TestSessionProvider = ({ children }) => {
       setCurrentSession(updatedSession)
 
       // Save to backend
-      console.log('🔍 Saving to backend:', {
         sessionId: currentSession.id,
         testResultsCount: updatedSession.testResults.length,
         totalScore: updatedSession.totalScore
@@ -149,7 +184,6 @@ export const TestSessionProvider = ({ children }) => {
         total_score: updatedSession.totalScore
       })
       
-      console.log('✅ Backend response:', response.data)
 
       if (response.data.success) {
         return { success: true, session: updatedSession }
@@ -187,22 +221,28 @@ export const TestSessionProvider = ({ children }) => {
   }
 
   // Complete entire session
-  const completeSession = async () => {
+  const completeSession = async (finalScore = null) => {
     if (!currentSession) {
       return { success: false, message: 'Không có phiên thi nào đang hoạt động' }
     }
 
     try {
       setIsLoading(true)
+      
+      // Use provided final score or current session score
+      const scoreToUse = finalScore !== null ? finalScore : currentSession.totalScore
+      
+      
       const response = await axios.put(`/sessions/${currentSession.id}`, {
         status: 'completed',
         test_results: currentSession.testResults,
-        total_score: currentSession.totalScore
+        total_score: scoreToUse
       })
 
       if (response.data.success) {
         const completedSession = {
           ...currentSession,
+          totalScore: scoreToUse, // Ensure final score is set
           isCompleted: true,
           status: 'completed',
           completedAt: new Date().toISOString()
@@ -211,8 +251,9 @@ export const TestSessionProvider = ({ children }) => {
         // Add to history
         setSessionHistory(prev => [completedSession, ...prev])
         
-        // Clear current session
-        setCurrentSession(null)
+        // Keep completed session for display (don't clear)
+        setCurrentSession(completedSession)
+        
         
         return { success: true, session: completedSession }
       } else {
@@ -269,14 +310,21 @@ export const TestSessionProvider = ({ children }) => {
 
   // Get test definition by number
   const getTestDefinition = (testNumber) => {
-    const result = testDefinitions.find(test => test.lesson_number === testNumber)
-    console.log(`🔍 getTestDefinition(${testNumber}):`, result ? 'found' : 'not found', { testDefinitionsCount: testDefinitions.length })
-    return result
+    if (!Array.isArray(testDefinitions) || testDefinitions.length === 0) {
+      return null
+    }
+    
+    const result = testDefinitions.find(test => {
+      const lessonNumber = Number(test?.lesson_number)
+      return lessonNumber === Number(testNumber)
+    })
+    
+    return result || null
   }
 
-  // Check if emergency test should appear before this lesson
-  const shouldShowEmergencyTest = (lessonNumber) => {
-    return emergencyTestPosition === lessonNumber
+  // Check if emergency test is currently active
+  const shouldShowEmergencyTest = () => {
+    return isEmergencyTestActive
   }
 
   // Get emergency test definition
@@ -320,12 +368,17 @@ export const TestSessionProvider = ({ children }) => {
     loadSessionHistory,
     loadTestDefinitions, // Expose this for manual reload
     
+    // Session management
+    clearSession: () => setCurrentSession(null),
+    
     // Utilities
     getTestDefinition,
     getSessionStats,
     
     // Emergency test
-    emergencyTestPosition,
+    isEmergencyTestActive,
+    triggerEmergencyTest,
+    completeEmergencyTest,
     shouldShowEmergencyTest,
     getEmergencyTestDefinition
   }

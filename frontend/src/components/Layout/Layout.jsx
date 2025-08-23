@@ -2,7 +2,7 @@ import React from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVoice } from '../../contexts/VoiceContext'
 import { useTestSession } from '../../contexts/TestSessionContext'
-import { LogOut, Volume2, VolumeX, User, Home, List, History } from 'lucide-react'
+import { LogOut, Volume2, VolumeX, User, Home, List, History, Settings } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 
 const Layout = ({ children }) => {
@@ -15,6 +15,7 @@ const Layout = ({ children }) => {
     { name: 'Trang chủ', href: '/', icon: Home },
     { name: 'Danh sách bài thi', href: '/tests', icon: List },
     { name: 'Lịch sử', href: '/history', icon: History },
+    { name: 'Cài đặt', href: '/settings', icon: Settings },
   ]
 
   const isActivePath = (path) => {

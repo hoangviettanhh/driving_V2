@@ -124,17 +124,39 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const logout = () => {
-    // Clear token and user data
-    localStorage.removeItem('driving_test_token')
-    delete axios.defaults.headers.common['Authorization']
-    
-    // Update state
-    setUser(null)
-    setIsAuthenticated(false)
-    
-    // Redirect to login
-    window.location.href = '/login'
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('driving_test_token')
+      
+      if (token) {
+        // Set authorization header for logout request
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        
+        try {
+          // Call backend logout to clear active_token for teachers
+          await axios.post('/auth/logout')
+          console.log('✅ Logout API called successfully')
+        } catch (error) {
+          console.warn('⚠️ Logout API failed (but continuing):', error.message)
+          // Continue with logout even if API fails
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Logout process error:', error.message)
+    } finally {
+      // Always clear local data regardless of API result
+      localStorage.removeItem('driving_test_token')
+      delete axios.defaults.headers.common['Authorization']
+      
+      // Update state
+      setUser(null)
+      setIsAuthenticated(false)
+      
+      console.log('🚪 Logout completed - redirecting to login')
+      
+      // Redirect to login
+      window.location.href = '/login'
+    }
   }
 
   const updateProfile = async (profileData) => {
@@ -161,6 +183,8 @@ export const AuthProvider = ({ children }) => {
     user,
     isAuthenticated,
     isLoading,
+    isAdmin: user?.role === 1,
+    isTeacher: user?.role === 2,
     login,
     register,
     logout,

@@ -1,141 +1,214 @@
 import React, { useState, useEffect } from 'react'
-import { AlertTriangle, Square, CheckSquare } from 'lucide-react'
-import EmergencySound from './EmergencySound'
+import { AlertTriangle, CheckCircle } from 'lucide-react'
+
 import { useTestSession } from '../contexts/TestSessionContext'
 import { useVoice } from '../contexts/VoiceContext'
+import { useAudio } from '../hooks/useAudio'
 
 const EmergencyTest = ({ onComplete, onError }) => {
   const [emergencyActive, setEmergencyActive] = useState(false)
   const [soundPlaying, setSoundPlaying] = useState(false)
   const [testPhase, setTestPhase] = useState('waiting') // waiting, active, completed
   const [testCompleted, setTestCompleted] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(10) // 10 seconds for emergency response
+  const [pulseIntensity, setPulseIntensity] = useState(1)
+  const [audioSequenceStarted, setAudioSequenceStarted] = useState(false) // Prevent multiple audio starts
   
   const { recordError } = useTestSession()
   const { speak } = useVoice()
+  const { playEmergency, play, stop } = useAudio()
 
   useEffect(() => {
-    // Auto-start emergency test
-    setTestPhase('active')
-    speak('Tình huống khẩn cấp! Bấm nút khẩn cấp')
-  }, [speak])
-
-  const handleEmergencyButton = () => {
-    if (!emergencyActive && !testCompleted) {
-      setEmergencyActive(true)
-      setSoundPlaying(true)
-      console.log('🚨 Emergency button activated')
+    // ONLY run once when component first mounts
+    if (audioSequenceStarted) {
+      return
     }
+    
+    setAudioSequenceStarted(true) // Mark as started to prevent re-runs
+    setTestPhase('active')
+    
+    // Create dramatic pulsing effect
+    const pulseInterval = setInterval(() => {
+      setPulseIntensity(prev => prev === 1 ? 1.2 : 1)
+    }, 500)
+    
+    // Safety timeout to prevent infinite emergency state (12 seconds max)
+    const safetyTimeout = setTimeout(() => {
+      setTestCompleted(true)
+      setTestPhase('completed')
+      if (onComplete) onComplete(0)
+    }, 12000) // 12 seconds max to allow full audio playback
+    
+    // Start emergency audio sequence with delay to show screen first
+    const startAudioSequence = setTimeout(() => {
+      
+      // Play khancap.mp3 and let it run COMPLETELY - DO NOT INTERRUPT
+      playEmergency().then(() => {
+        handleSoundComplete()
+      }).catch(error => {
+        console.error('❌ Emergency audio failed:', error)
+        // Still complete the test even if audio fails
+        handleSoundComplete()
+      })
+      
+      setSoundPlaying(true)
+    }, 1000) // 1 second delay to show UI first
+    
+    // Cleanup function
+    return () => {
+      clearInterval(pulseInterval)
+      clearTimeout(safetyTimeout)
+      clearTimeout(startAudioSequence)
+      
+      // Only stop TTS, let emergency audio complete naturally
+      try {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+        }
+      } catch (error) {
+        console.error('Error during emergency cleanup:', error)
+      }
+    }
+  }, []) // EMPTY dependency array to prevent re-runs
+
+  // Countdown timer with increasing urgency
+  useEffect(() => {
+    if (testPhase === 'active' && !testCompleted && timeLeft > 0) {
+      const timer = setTimeout(() => {
+        setTimeLeft(prev => prev - 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    } else if (timeLeft === 0 && !emergencyActive) {
+      // Timeout - dramatic failure
+      setTimeout(() => {
+        onComplete && onComplete(0)
+      }, 1000)
+    }
+  }, [testPhase, testCompleted, timeLeft, emergencyActive, speak, onComplete])
+
+  const handleEmergencyButton = async () => {
+    
+    if (testCompleted) {
+      return
+    }
+    
+    // Immediate visual feedback
+    setEmergencyActive(true)
+    
+    // Add screen flash effect
+    document.body.style.backgroundColor = '#ff0000'
+    setTimeout(() => {
+      document.body.style.backgroundColor = ''
+    }, 200)
+    
+    // User responded to emergency - just mark as active, let audio continue naturally
+    
+    // Award points for user response but let the audio sequence complete first
   }
 
   const handleSoundComplete = () => {
     setSoundPlaying(false)
     setTestCompleted(true)
     setTestPhase('completed')
-    console.log('🔊 Emergency sound completed - test successful!')
     
-    // Just complete the test without points
-    speak('Tình huống khẩn cấp đã xử lý xong')
     setTimeout(() => {
-      onComplete && onComplete(0) // No points change
+      onComplete && onComplete(0)
     }, 2000)
   }
 
-  // Handle timeout - if user doesn't press emergency button in time
-  useEffect(() => {
-    if (testPhase === 'active' && !testCompleted) {
-      const timeout = setTimeout(() => {
-        if (!emergencyActive) {
-          console.log('🚨 Emergency test failed - timeout')
-          speak('Hết thời gian xử lý tình huống khẩn cấp')
-          setTimeout(() => {
-            onComplete && onComplete(0) // No points change
-          }, 2000)
-        }
-      }, 10000) // 10 seconds timeout
-
-      return () => clearTimeout(timeout)
-    }
-  }, [testPhase, testCompleted, emergencyActive, speak, recordError, onComplete])
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 p-4">
-      <div className="max-w-md mx-auto">
-        {/* Header */}
-        <div className="bg-red-600 text-white p-4 rounded-t-lg text-center">
-          <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
-          <h2 className="text-xl font-bold">Tình Huống Khẩn Cấp</h2>
-          <p className="text-sm opacity-90">Xử lý tình huống khẩn cấp trên đường</p>
-        </div>
-
-        {/* Sound Component */}
-        <div className="bg-white p-4 border-x border-gray-200">
-          <EmergencySound 
-            isPlaying={soundPlaying} 
-            onComplete={handleSoundComplete}
-          />
-        </div>
-
-        {/* Control Panel */}
-        <div className="bg-white p-6 border-x border-gray-200 space-y-4">
-          {/* Emergency Button */}
-          <div className="text-center">
-            <button
-              onClick={handleEmergencyButton}
-              disabled={testCompleted}
-              className={`w-40 h-40 rounded-full text-white font-bold text-xl transition-all duration-200 ${
-                testCompleted 
-                  ? 'bg-green-600 cursor-not-allowed' 
-                  : emergencyActive 
-                    ? 'bg-red-600 shadow-lg animate-pulse cursor-not-allowed' 
-                    : 'bg-red-500 hover:bg-red-600 shadow-lg hover:shadow-xl'
-              }`}
-            >
-              {testCompleted ? '✅ HOÀN THÀNH' : emergencyActive ? '🚨 ĐANG HÚ' : '🚨 KHẨN CẤP'}
-            </button>
-            <p className="text-sm text-gray-600 mt-3">
-              {testCompleted ? 'Tình huống đã xử lý thành công!' : 
-               emergencyActive ? 'Đang phát tín hiệu khẩn cấp...' : 
-               'Bấm ngay khi có tình huống khẩn cấp'}
-            </p>
+    <div className={`min-h-screen relative overflow-hidden transition-all duration-1000 ${
+      testCompleted 
+        ? 'bg-gradient-to-br from-green-400 via-green-500 to-green-600' 
+        : emergencyActive 
+          ? 'bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500' 
+          : 'bg-gradient-to-br from-red-500 via-red-600 to-red-700'
+    }`}>
+      
+      {/* Clean animated background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+        {!testCompleted && (
+          <div className="absolute inset-0">
+            <div className="absolute top-20 left-20 w-32 h-32 bg-white rounded-full opacity-5 animate-pulse"></div>
+            <div className="absolute bottom-32 right-16 w-24 h-24 bg-yellow-300 rounded-full opacity-10 animate-ping"></div>
+            <div className="absolute top-1/2 right-20 w-20 h-20 bg-white rounded-full opacity-5 animate-bounce"></div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Instructions */}
-        <div className="bg-yellow-50 p-4 border-x border-gray-200">
-          <h3 className="font-medium text-yellow-800 mb-2">Hướng dẫn:</h3>
-          <div className="text-sm text-yellow-700">
-            <p className="font-medium">Khi có tình huống khẩn cấp:</p>
-            <p>• Bấm nút KHẨN CẤP ngay lập tức</p>
-            <p>• Hệ thống sẽ tự động phát tín hiệu cảnh báo</p>
-            <p>• Sau khi hết tiếng hú sẽ có tiếng tít kết thúc</p>
-          </div>
-        </div>
+      {/* Main content */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 text-center">
+        
+        {!testCompleted ? (
+          <>
+            {/* Main alert icon */}
+            <div className="mb-8 relative">
+              <div className="w-32 h-32 bg-white bg-opacity-20 backdrop-blur-sm rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-pulse">
+                <AlertTriangle className="w-16 h-16 text-white" />
+              </div>
+              <div className="absolute -inset-4 border-4 border-white rounded-full opacity-30 animate-ping"></div>
+            </div>
 
-        {/* Status Display */}
-        {testCompleted && (
-          <div className="bg-green-50 p-4 border-x border-gray-200">
-            <div className="text-center">
-              <div className="text-green-600 text-2xl mb-2">✅</div>
-              <h3 className="font-medium text-green-800">Đã hoàn thành!</h3>
-              <p className="text-sm text-green-700">Tình huống khẩn cấp đã xử lý</p>
+            {/* Title */}
+            <div className="mb-8 space-y-4">
+              <h1 className="text-5xl font-black text-white animate-pulse">
+                ⚠️ NGUY HIỂM! ⚠️
+              </h1>
+              <h2 className="text-2xl font-bold text-yellow-300">
+                TÌNH HUỐNG NGUY HIỂM!
+              </h2>
+              <p className="text-xl text-white font-semibold">
+                ⚡ XỬ LÝ NGAY LẬP TỨC!
+              </p>
+            </div>
+
+            {/* Countdown */}
+            <div className="mb-8">
+              <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center text-3xl font-black text-white border-4 border-white animate-pulse shadow-2xl">
+                {timeLeft}s
+              </div>
+              <p className="text-white font-bold mt-2">Thời gian còn lại</p>
+            </div>
+
+            {/* Instructions */}
+            <div className="mb-8 bg-black bg-opacity-30 backdrop-blur-sm rounded-2xl p-6 border-2 border-yellow-400 max-w-sm">
+              <h3 className="text-yellow-400 font-bold text-xl mb-4">⚡ HÀNH ĐỘNG NGAY!</h3>
+              <div className="space-y-2 text-left text-white">
+                <p>1. BẤM NÚT ĐỎ NGAY LẬP TỨC!</p>
+                <p>2. Tiếng hú cảnh báo sẽ rất LOUD!</p>
+                <p>3. Chờ tiếng "TÍT" kết thúc</p>
+              </div>
+            </div>
+
+            {/* Emergency button */}
+            {!emergencyActive ? (
+              <button
+                onClick={handleEmergencyButton}
+                className="w-64 h-16 bg-red-600 hover:bg-red-700 border-4 border-white rounded-2xl text-white font-black text-xl shadow-2xl transform hover:scale-105 transition-all duration-200 animate-pulse"
+              >
+                🚨 BẤM ĐỂ XỬ LÝ KHẨN CẤP
+              </button>
+            ) : (
+              <div className="w-64 h-16 bg-green-500 border-4 border-white rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-2xl animate-bounce">
+                ✅ ĐANG XỬ LÝ...
+              </div>
+            )}
+          </>
+        ) : (
+          /* Success state */
+          <div className="text-center space-y-6">
+            <div className="w-24 h-24 bg-white bg-opacity-20 backdrop-blur-sm rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-bounce">
+              <CheckCircle className="w-12 h-12 text-white" />
+            </div>
+            
+            <div className="space-y-3">
+              <h1 className="text-4xl font-black text-white">✅ HOÀN THÀNH!</h1>
+              <p className="text-xl text-white font-bold">Tình huống khẩn cấp đã được xử lý</p>
+              <p className="text-lg text-green-100">Quay lại bài thi trong giây lát...</p>
             </div>
           </div>
         )}
-
-        {/* Auto Complete */}
-        <div className="bg-white p-4 rounded-b-lg border border-gray-200">
-          <div className="text-center">
-            {testCompleted ? (
-              <div className="text-green-600 font-medium">
-                ✅ Tự động chuyển sang bài tiếp theo...
-              </div>
-            ) : (
-              <div className="text-gray-600 text-sm">
-                ⏱️ Thời gian xử lý: 10 giây
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   )

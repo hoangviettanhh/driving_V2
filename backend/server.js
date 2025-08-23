@@ -47,11 +47,15 @@ const connectDB = async () => {
 connectDB()
 
 // Middleware
+app.set('trust proxy', true) // Trust proxy for correct IP detection
 app.use(helmet())
 app.use(compression())
 app.use(cors({
-  origin: ['http://localhost:3020', 'http://localhost:5173'],
-  credentials: true
+  origin: ['http://localhost:3020', 'http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  optionsSuccessStatus: 200
 }))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
@@ -99,7 +103,7 @@ const authenticateToken = async (req, res, next) => {
     
     // Get user from database
     const [users] = await db.execute(
-      'SELECT id, username, email, full_name, phone, is_active FROM users WHERE id = ? AND is_active = TRUE',
+      'SELECT id, username, email, full_name, phone, role, active_token, is_active FROM users WHERE id = ? AND is_active = TRUE',
       [decoded.userId]
     )
 
@@ -110,7 +114,22 @@ const authenticateToken = async (req, res, next) => {
       })
     }
 
-    req.user = users[0]
+    const user = users[0]
+
+    // For teachers (role=2), check single device login
+    if (user.role === 2 && user.active_token && user.active_token !== token) {
+      console.log(`🚫 Single device violation: Teacher ${user.username} token mismatch`)
+      return res.status(403).json({
+        success: false,
+        error: { 
+          code: 'DEVICE_LIMIT_EXCEEDED', 
+          message: 'Phát hiện tài khoản đăng nhập nhiều thiết bị. Vui lòng liên hệ quản trị viên.',
+          details: 'Tài khoản giáo viên chỉ được phép đăng nhập trên 1 thiết bị duy nhất.'
+        }
+      })
+    }
+
+    req.user = user
     next()
   } catch (error) {
     console.error('Auth error:', error)
@@ -120,6 +139,35 @@ const authenticateToken = async (req, res, next) => {
     })
   }
 }
+
+// Role-based authorization middleware
+const requireRole = (requiredRole) => {
+  return (req, res, next) => {
+    const userRole = req.user.role
+    
+    if (requiredRole === 1 && userRole !== 1) {
+      // Only admin can access
+      return res.status(403).json({
+        success: false,
+        error: { code: 'INSUFFICIENT_PERMISSIONS', message: 'Admin access required' }
+      })
+    }
+    
+    if (requiredRole === 2 && userRole !== 1 && userRole !== 2) {
+      // Admin or teacher can access
+      return res.status(403).json({
+        success: false,
+        error: { code: 'INSUFFICIENT_PERMISSIONS', message: 'Teacher or admin access required' }
+      })
+    }
+    
+    next()
+  }
+}
+
+// Helper functions for role checking
+const isAdmin = (req, res, next) => requireRole(1)(req, res, next)
+const isTeacher = (req, res, next) => requireRole(2)(req, res, next)
 
 // Validation schemas
 const loginSchema = Joi.object({
@@ -132,7 +180,8 @@ const registerSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
   full_name: Joi.string().min(2).max(100).required(),
-  phone: Joi.string().pattern(/^[0-9+\-\s()]+$/).optional()
+  phone: Joi.string().pattern(/^[0-9+\-\s()]+$/).optional(),
+  role: Joi.number().integer().valid(1, 2).default(2)
 })
 
 // Routes
@@ -207,7 +256,7 @@ app.post('/api/auth/register', async (req, res) => {
       })
     }
 
-    const { username, email, password, full_name, phone } = value
+    const { username, email, password, full_name, phone, role } = value
 
     // Check if user exists
     const [existingUsers] = await db.execute(
@@ -227,8 +276,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Create user
     const [result] = await db.execute(
-      'INSERT INTO users (username, email, password_hash, full_name, phone) VALUES (?, ?, ?, ?, ?)',
-      [username, email, hashedPassword, full_name, phone || null]
+      'INSERT INTO users (username, email, password_hash, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, email, hashedPassword, full_name, phone || null, role || 2]
     )
 
     res.status(201).json({
@@ -269,7 +318,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Get user
     const [users] = await db.execute(
-      'SELECT id, username, email, password_hash, full_name, phone, is_active FROM users WHERE username = ?',
+      'SELECT id, username, email, password_hash, full_name, phone, role, active_token, suspicious_activity_count, last_suspicious_attempt, is_flagged, is_active FROM users WHERE username = ?',
       [username]
     )
 
@@ -285,7 +334,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user.is_active) {
       return res.status(401).json({
         success: false,
-        error: { code: 'ACCOUNT_DISABLED', message: 'Account is disabled' }
+        error: { code: 'ACCOUNT_DISABLED', message: 'Tài khoản bị vô hiệu hoá. Vui lòng liên hệ quản trị viên.' }
       })
     }
 
@@ -302,12 +351,95 @@ app.post('/api/auth/login', async (req, res) => {
       })
     }
 
+    // Get device info - combine IP and User-Agent for better device detection
+    const clientIP = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown'
+    const userAgent = req.headers['user-agent'] || ''
+    
+    // Extract device info from User-Agent (OS + Device type)
+    const deviceInfo = userAgent.match(/(Windows|Mac|Linux|iPhone|iPad|Android)/i)?.[0] || 'Unknown'
+    const browserInfo = userAgent.match(/(Chrome|Firefox|Safari|Edge)/i)?.[0] || 'Unknown'
+    
+    // Create device signature: IP + Device + Browser (more flexible for same device)
+    const deviceSignature = `${clientIP}-${deviceInfo}-${browserInfo}`
+    const deviceFingerprint = Buffer.from(deviceSignature).toString('base64').slice(0, 30)
+
     // Generate JWT
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { 
+        userId: user.id, 
+        username: user.username, 
+        role: user.role,
+        deviceFingerprint: deviceFingerprint
+      },
       config.JWT_SECRET,
       { expiresIn: '7d' }
     )
+
+    // For teachers (role=2), check single device login BEFORE allowing login
+    if (user.role === 2) {
+      // Check if user already has an active token (already logged in somewhere)
+      if (user.active_token && user.active_token.trim() !== '') {
+        try {
+          // Verify if the existing token is still valid
+          const decodedExisting = jwt.verify(user.active_token, config.JWT_SECRET)
+          
+          // Check if it's the same device (fuzzy matching for mobile scenarios)
+          const existingDeviceInfo = Buffer.from(decodedExisting.deviceFingerprint, 'base64').toString()
+          const currentDeviceInfo = Buffer.from(deviceFingerprint, 'base64').toString()
+          
+          // Extract device and browser info from both signatures
+          const existingParts = existingDeviceInfo.split('-')
+          const currentParts = currentDeviceInfo.split('-')
+          
+          // Same device if: Same OS + Same Browser (ignore IP for mobile flexibility)
+          const sameOS = existingParts[1] === currentParts[1] // Same device type (Mac, Windows, etc.)
+          const sameBrowser = existingParts[2] === currentParts[2] // Same browser
+          
+          if (decodedExisting.deviceFingerprint === deviceFingerprint || (sameOS && sameBrowser)) {
+            console.log(`🔄 Same device login: Allowing teacher ${user.username} (${currentParts[1]}-${currentParts[2]}) from IP: ${clientIP}`)
+            // Same device - allow login and update token
+          } else {
+            // SUSPICIOUS ACTIVITY DETECTED - Log and increment counter
+            console.log(`🚫 SUSPICIOUS ACTIVITY: Teacher ${user.username} trying ${currentParts[1]}-${currentParts[2]} from ${clientIP}, but already logged in on ${existingParts[1]}-${existingParts[2]}`)
+            
+            // Increment suspicious activity counter and update timestamp
+            const newSuspiciousCount = (user.suspicious_activity_count || 0) + 1
+            const shouldFlag = newSuspiciousCount >= 3 // Flag after 3 attempts
+            
+            await db.execute(
+              'UPDATE users SET suspicious_activity_count = ?, last_suspicious_attempt = NOW(), is_flagged = ? WHERE id = ?',
+              [newSuspiciousCount, shouldFlag, user.id]
+            )
+            
+            console.log(`🚨 User ${user.username} suspicious activity count: ${newSuspiciousCount}${shouldFlag ? ' - ACCOUNT FLAGGED!' : ''}`)
+            
+            return res.status(403).json({
+              success: false,
+              error: { 
+                code: 'ALREADY_LOGGED_IN', 
+                message: 'Phát hiện tài khoản đăng nhập nhiều thiết bị. Vui lòng liên hệ quản trị viên.',
+                details: 'Tài khoản giáo viên chỉ được phép đăng nhập trên 1 thiết bị duy nhất.'
+              }
+            })
+          }
+        } catch (tokenError) {
+          // Token is invalid/expired, clear it and allow login
+          console.log(`🔄 Clearing expired/invalid token for teacher ${user.username}`)
+          await db.execute(
+            'UPDATE users SET active_token = NULL WHERE id = ?',
+            [user.id]
+          )
+          // Continue with login process
+        }
+      }
+
+      // Save new token to database
+      await db.execute(
+        'UPDATE users SET active_token = ? WHERE id = ?',
+        [token, user.id]
+      )
+      console.log(`🔒 Single device login: Token saved for teacher ${user.username}`)
+    }
 
     // Remove password from response
     delete user.password_hash
@@ -335,6 +467,201 @@ app.get('/api/auth/profile', authenticateToken, (req, res) => {
     success: true,
     data: req.user
   })
+})
+
+// Logout endpoint
+app.post('/api/auth/logout', authenticateToken, async (req, res) => {
+  try {
+    // For teachers (role=2), clear active token
+    if (req.user.role === 2) {
+      await db.execute(
+        'UPDATE users SET active_token = NULL WHERE id = ?',
+        [req.user.id]
+      )
+      console.log(`🚪 Logout: Active token cleared for teacher ${req.user.username}`)
+    }
+
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    })
+  } catch (error) {
+    console.error('Logout error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'LOGOUT_ERROR', message: 'Logout failed' }
+    })
+  }
+})
+
+// Admin force logout teacher (admin only)
+app.post('/api/admin/force-logout/:userId', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params
+    
+    // Clear active token for the specified user
+    const [result] = await db.execute(
+      'UPDATE users SET active_token = NULL WHERE id = ? AND role = 2',
+      [userId]
+    )
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'Teacher not found' }
+      })
+    }
+
+    console.log(`👨‍💼 Admin ${req.user.username} force logged out teacher ID: ${userId}`)
+    
+    res.json({
+      success: true,
+      message: 'Teacher logged out successfully'
+    })
+  } catch (error) {
+    console.error('Force logout error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'FORCE_LOGOUT_ERROR', message: 'Force logout failed' }
+    })
+  }
+})
+
+// Get users with suspicious activity (admin only)
+app.get('/api/admin/suspicious-users', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const [users] = await db.execute(`
+      SELECT 
+        id, username, full_name, email, phone, 
+        suspicious_activity_count, last_suspicious_attempt, is_flagged,
+        created_at, updated_at
+      FROM users 
+      WHERE role = 2 AND (suspicious_activity_count > 0 OR is_flagged = TRUE)
+      ORDER BY suspicious_activity_count DESC, last_suspicious_attempt DESC
+    `)
+    
+    res.json({
+      success: true,
+      data: users
+    })
+  } catch (error) {
+    console.error('Get suspicious users error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: 'Failed to fetch suspicious users' }
+    })
+  }
+})
+
+// Reset suspicious activity for user (admin only)
+app.post('/api/admin/reset-suspicious/:userId', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params
+    
+    const [result] = await db.execute(
+      'UPDATE users SET suspicious_activity_count = 0, last_suspicious_attempt = NULL, is_flagged = FALSE WHERE id = ? AND role = 2',
+      [userId]
+    )
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'Teacher not found' }
+      })
+    }
+
+    console.log(`👨‍💼 Admin ${req.user.username} reset suspicious activity for teacher ID: ${userId}`)
+    
+    res.json({
+      success: true,
+      message: 'Suspicious activity reset successfully'
+    })
+  } catch (error) {
+    console.error('Reset suspicious activity error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'RESET_ERROR', message: 'Failed to reset suspicious activity' }
+    })
+  }
+})
+
+// Get all users (admin only)
+app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const [users] = await db.execute(`
+      SELECT 
+        id, username, email, full_name, phone, role,
+        suspicious_activity_count, last_suspicious_attempt, is_flagged, is_active,
+        created_at, updated_at
+      FROM users 
+      ORDER BY 
+        role ASC,
+        is_flagged DESC,
+        suspicious_activity_count DESC,
+        created_at DESC
+    `)
+    
+    res.json({
+      success: true,
+      data: users
+    })
+  } catch (error) {
+    console.error('Get users error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'FETCH_ERROR', message: 'Failed to fetch users' }
+    })
+  }
+})
+
+// Toggle user active status (admin only)
+app.post('/api/admin/toggle-user/:userId', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params
+    
+    // Get current status
+    const [users] = await db.execute(
+      'SELECT id, username, is_active, role FROM users WHERE id = ?',
+      [userId]
+    )
+    
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found' }
+      })
+    }
+    
+    const user = users[0]
+    const newStatus = !user.is_active
+    
+    // Don't allow deactivating admin accounts
+    if (user.role === 1 && !newStatus) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'CANNOT_DEACTIVATE_ADMIN', message: 'Cannot deactivate admin accounts' }
+      })
+    }
+    
+    // Update status and clear active token if deactivating
+    await db.execute(
+      'UPDATE users SET is_active = ?, active_token = ? WHERE id = ?',
+      [newStatus, newStatus ? null : null, userId]
+    )
+    
+    console.log(`👨‍💼 Admin ${req.user.username} ${newStatus ? 'activated' : 'deactivated'} user ${user.username}`)
+    
+    res.json({
+      success: true,
+      message: `User ${newStatus ? 'activated' : 'deactivated'} successfully`
+    })
+  } catch (error) {
+    console.error('Toggle user status error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'TOGGLE_ERROR', message: 'Failed to toggle user status' }
+    })
+  }
 })
 
 // Test Routes

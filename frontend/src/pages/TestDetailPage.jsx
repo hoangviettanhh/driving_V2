@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTestSession } from '../contexts/TestSessionContext'
 import { useVoice } from '../contexts/VoiceContext'
+import { useAudio } from '../hooks/useAudio'
 import { ChevronLeft, ChevronRight, Volume2, AlertCircle, CheckCircle, XCircle, Car } from 'lucide-react'
 import LoadingCar from '../components/LoadingCar'
 import DrivingAnimation from '../components/DrivingAnimation'
@@ -21,11 +22,15 @@ const TestDetailPage = () => {
     getTestDefinition,
     getSessionStats,
     loadTestDefinitions,
+    isEmergencyTestActive,
+    triggerEmergencyTest,
+    completeEmergencyTest,
     shouldShowEmergencyTest,
     getEmergencyTestDefinition
   } = useTestSession()
   
   const { speak, speakError, speakScore } = useVoice()
+  const { playEmergency, playError, playLesson, playTestBeep, playAlertSound } = useAudio()
   
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentTestErrors, setCurrentTestErrors] = useState([])
@@ -46,13 +51,18 @@ const TestDetailPage = () => {
   const currentTest = getTestDefinition(currentTestNumber)
   const sessionStats = getSessionStats()
   
+  // Reset detected errors when test number changes (but keep accumulated score)
+  useEffect(() => {
+    setDetectedErrors([]) // Reset detected errors for new test
+    // DO NOT reset localScore - it should accumulate across tests
+  }, [currentTestNumber])
+  
   // Component initialization - Start exam timer
   useEffect(() => {
     // Start exam timer when first entering any test
     if (currentSession && !examStartTime) {
       const startTime = Date.now()
       setExamStartTime(startTime)
-      console.log('⏰ Exam timer started at:', new Date(startTime).toLocaleTimeString())
     }
   }, [currentSession, examStartTime])
 
@@ -88,7 +98,6 @@ const TestDetailPage = () => {
           setLocalScore(newScore)
           
           speak('Quá thời gian')
-          console.log('⏰ Overtime penalty:', newPenalties, 'points. New score:', newScore)
         }
       }
     }, 1000)
@@ -107,14 +116,37 @@ const TestDetailPage = () => {
   useEffect(() => {
     if (currentTest && currentTest.common_errors) {
       try {
-        const errors = typeof currentTest.common_errors === 'string' 
-          ? JSON.parse(currentTest.common_errors)
-          : currentTest.common_errors
-        setCurrentTestErrors(Array.isArray(errors) ? errors : [])
+        let errors = []
+        if (typeof currentTest.common_errors === 'string') {
+          // Try to parse JSON string
+          const trimmed = currentTest.common_errors.trim()
+          if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+            errors = JSON.parse(trimmed)
+          } else {
+            console.warn('common_errors is not valid JSON:', trimmed)
+            errors = []
+          }
+        } else if (Array.isArray(currentTest.common_errors)) {
+          errors = currentTest.common_errors
+        } else if (typeof currentTest.common_errors === 'object') {
+          errors = Object.values(currentTest.common_errors)
+        }
+        
+        // Ensure errors is an array and validate each error object
+        const validErrors = Array.isArray(errors) ? errors.filter(error => 
+          error && 
+          typeof error === 'object' && 
+          typeof error.error === 'string' && 
+          typeof error.points === 'number'
+        ) : []
+        
+        setCurrentTestErrors(validErrors)
       } catch (e) {
-        console.error('Error parsing common_errors:', e)
+        console.error('Error parsing common_errors for test', currentTest.lesson_number, ':', e)
         setCurrentTestErrors([])
       }
+    } else {
+      setCurrentTestErrors([])
     }
   }, [currentTest])
   
@@ -123,12 +155,14 @@ const TestDetailPage = () => {
     setTestPhase('loading')
     setAnimationComplete(false)
     setShowEmergencyTest(false)
-    
-    // Check if emergency test should appear before this lesson
-    if (shouldShowEmergencyTest(currentTestNumber)) {
+  }, [currentTestNumber])
+
+  // Watch for emergency test activation - PREVENT MULTIPLE TRIGGERS
+  useEffect(() => {
+    if (shouldShowEmergencyTest() && !showEmergencyTest) {
       setShowEmergencyTest(true)
     }
-  }, [currentTestNumber, shouldShowEmergencyTest])
+  }, [isEmergencyTestActive, shouldShowEmergencyTest, showEmergencyTest])
 
   // Handle test flow: loading -> animation -> speaking -> ready
   useEffect(() => {
@@ -139,20 +173,40 @@ const TestDetailPage = () => {
         setTimeout(() => {
           setAnimationComplete(true)
           setTestPhase('speaking')
-          // AI speaks only the test name
-          speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}`).then(() => {
-            setTestPhase('ready')
-          })
+          // Try to play lesson audio first, fallback to TTS
+          
+          // Special handling for lessons that need AI voice
+          if (currentTestNumber === 8 || currentTestNumber === 10 || currentTestNumber === 11) {
+            speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}`).then(() => {
+              setTestPhase('ready')
+            }).catch(() => {
+              setTestPhase('ready')
+            })
+          } else {
+            // Try audio file first
+            playLesson(currentTestNumber).then(() => {
+              setTestPhase('ready')
+            }).catch((error) => {
+              speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}`).then(() => {
+                setTestPhase('ready')
+              }).catch(() => {
+                setTestPhase('ready') // Ensure we reach ready state even if speak fails
+              })
+            })
+          }
         }, 3000)
       }
     }
-  }, [currentTest, testPhase, currentTestNumber, speak, showEmergencyTest])
+  }, [currentTest?.id, testPhase, currentTestNumber, showEmergencyTest]) // Remove speak from dependencies
   
   // Handle emergency test completion
   const handleEmergencyTestComplete = (pointsAwarded) => {
-    // Hide emergency test and continue with normal lesson
+    // Complete emergency test in context and hide UI
+    completeEmergencyTest()
     setShowEmergencyTest(false)
-    setTestPhase('loading')
+    
+    // DO NOT set testPhase to 'loading' - keep current test state
+    // setTestPhase('loading') // This causes re-trigger
   }
 
   // Redirect if no active session
@@ -319,8 +373,8 @@ const TestDetailPage = () => {
     const newScore = Math.max(0, localScore - error.points)
     setLocalScore(newScore)
     
-    // Speak error and new score
-    speak(`${error.error}. Trừ ${error.points} điểm. Điểm hiện tại: ${newScore}`)
+    // Speak only the error, not the points deduction
+    speak(`${error.error}`)
       .catch(() => {}) // Ignore voice errors
   }
   
@@ -338,25 +392,38 @@ const TestDetailPage = () => {
           // No voice during transition - will speak when entering new test
         }
       } else {
-        // Complete entire session with local score
-        const sessionWithLocalData = {
-          ...currentSession,
-          totalScore: localScore,
-          testResults: [{
-            testNumber: currentTestNumber,
-            testName: currentTest?.lesson_name || `Bài ${currentTestNumber}`,
-            errorsDetected: detectedErrors,
-            pointsDeducted: 100 - localScore,
-            isDisqualified: localScore === 0
-          }]
-        }
+        // Complete final test and entire session
         
-        // Navigate to result page with local session data
-        navigate('/result', { 
-          state: { 
-            session: sessionWithLocalData
-          } 
-        })
+        // First complete the current test
+        const testResult = await completeTest(currentTestNumber)
+        if (testResult.success) {
+          // Update session with final score
+          const updatedSession = {
+            ...currentSession,
+            totalScore: localScore,
+            currentTestNumber: 12, // Mark as fully completed
+            isCompleted: true
+          }
+          
+          // Complete the entire session with final score
+          const sessionResult = await completeSession(localScore)
+          if (sessionResult.success) {
+            // Navigate to result page
+            navigate('/result', { 
+              state: { 
+                session: sessionResult.session || updatedSession
+              } 
+            })
+          } else {
+            console.error('❌ Failed to complete session:', sessionResult.message)
+            // Fallback - still navigate to result
+            navigate('/result', { 
+              state: { 
+                session: updatedSession
+              } 
+            })
+          }
+        }
       }
     } catch (error) {
       console.error('Error completing test:', error)
@@ -375,11 +442,19 @@ const TestDetailPage = () => {
   
   // Handle speak test description
   const handleSpeakTest = () => {
-    speak(`${currentTest.lesson_name}. ${currentTest.description}`)
+    // Special handling for lessons that need AI voice
+    if (currentTestNumber === 8 || currentTestNumber === 10 || currentTestNumber === 11) {
+      speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}. ${currentTest.description}`)
+    } else {
+      // Try lesson audio first, fallback to TTS
+      playLesson(currentTestNumber).catch(() => {
+        speak(`${currentTest.lesson_name}. ${currentTest.description}`)
+      })
+    }
   }
   
-  // Get current test result
-  const currentTestResult = currentSession.testResults.find(r => r.testNumber === currentTestNumber)
+  // Get current test result - with null safety
+  const currentTestResult = currentSession?.testResults?.find(r => r.testNumber === currentTestNumber)
   const testPointsDeducted = currentTestResult ? currentTestResult.pointsDeducted : 0
   const testErrorsDetected = currentTestResult ? currentTestResult.errorsDetected : []
   
@@ -415,49 +490,49 @@ const TestDetailPage = () => {
   
   // Ready phase - show test interface with errors
   return (
-    <div className="p-4 space-y-6 max-w-4xl mx-auto">
+    <div className="p-2 sm:p-3 space-y-3 sm:space-y-4 max-w-lg mx-auto pb-16">
       {/* Header */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {/* Timer Display - COUNT UP */}
-        <div className={`text-center p-3 rounded-lg font-mono text-lg font-bold ${
+        <div className={`text-center p-2 rounded-lg font-mono text-sm sm:text-base font-bold ${
           timerInfo.isOvertime 
             ? 'bg-red-100 text-red-700 border-2 border-red-300 animate-pulse' 
             : 'bg-green-100 text-green-700 border-2 border-green-300'
         }`}>
-          <div className="flex items-center justify-center space-x-2">
+          <div className="flex items-center justify-center space-x-2 text-sm sm:text-base">
             <span>⏰</span>
             <span>{timerInfo.display}</span>
-            <span className="text-sm font-normal">/ 18:00</span>
+            <span className="text-xs sm:text-sm font-normal">/ 18:00</span>
             {timerInfo.isOvertime && (
-              <span className="text-red-600 text-sm">
+              <span className="text-red-600 text-xs sm:text-sm">
                 {timerInfo.overtimeDisplay}
               </span>
             )}
           </div>
           {timerInfo.isOvertime && (
-            <div className="text-sm mt-1 text-red-600 font-medium">
+            <div className="text-xs sm:text-sm mt-1 text-red-600 font-medium">
               ⚠️ Quá giờ! Trừ 1 điểm mỗi 3 giây (Đã trừ: {overtimePenalties} điểm)
             </div>
           )}
         </div>
         
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="test-card-number bg-primary-600">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start space-x-3 flex-1 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm sm:text-base font-bold flex-shrink-0">
               {currentTestNumber}
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{currentTest.lesson_name}</h1>
-              <p className="text-sm text-gray-600">{currentTest.description}</p>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-gray-900 leading-tight">{currentTest.lesson_name}</h1>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1 leading-relaxed">{currentTest.description}</p>
             </div>
           </div>
           
           <button
             onClick={handleSpeakTest}
-            className="voice-btn"
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary-100 hover:bg-primary-200 text-primary-600 hover:text-primary-700 transition-all duration-200 flex items-center justify-center flex-shrink-0 ml-3"
             title="Nghe lại mô tả bài thi"
           >
-            <Volume2 className="w-5 h-5" />
+            <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
         
@@ -468,13 +543,13 @@ const TestDetailPage = () => {
       </div>
       
       {/* Progress Bar */}
-      <div className="card">
-        <div className="card-body">
+      <div className="bg-white rounded-lg sm:rounded-xl shadow-md border border-gray-100">
+        <div className="p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-xs sm:text-sm font-medium text-gray-700">
               Tiến độ: {currentTestNumber}/11 bài
             </span>
-            <span className="text-sm text-gray-600">
+            <span className="text-xs sm:text-sm text-gray-600">
               {Math.round((currentTestNumber / 11) * 100)}%
             </span>
           </div>
@@ -522,9 +597,9 @@ const TestDetailPage = () => {
             </div>
             <div className="text-right">
               <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                currentSession.totalScore >= 80 ? 'bg-success-100 text-success-800' : 'bg-danger-100 text-danger-800'
+                (currentSession?.totalScore || localScore) >= 80 ? 'bg-success-100 text-success-800' : 'bg-danger-100 text-danger-800'
               }`}>
-                {currentSession.totalScore >= 80 ? (
+                {(currentSession?.totalScore || localScore) >= 80 ? (
                   <>
                     <CheckCircle className="w-4 h-4 mr-1" />
                     Đậu
@@ -569,7 +644,7 @@ const TestDetailPage = () => {
           </h3>
         </div>
         <div className="card-body">
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {currentTestErrors.map((error, index) => {
               const isDisqualification = error.type === 'disqualification'
               const alreadyDetected = detectedErrors.some(detected => detected.error === error.error)
@@ -580,7 +655,7 @@ const TestDetailPage = () => {
                   type="button"
                   onClick={(event) => handleErrorClick(event, error)}
                   disabled={isProcessing || alreadyDetected}
-                  className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
+                  className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
                     alreadyDetected
                       ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
                       : isDisqualification
@@ -655,6 +730,58 @@ const TestDetailPage = () => {
             )}
           </button>
         </div>
+        
+        {/* Special Buttons for Parking Tests */}
+        {(currentTestNumber === 7 || currentTestNumber === 10) && (
+          <div className="mb-4">
+            <button
+              onClick={() => {
+                playTestBeep().then(() => {
+                }).catch(error => {
+                  console.error('Failed to play test beep:', error)
+                })
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 shadow-lg mb-3"
+            >
+              <span className="text-xl">🔔</span>
+              <span>Tút</span>
+            </button>
+          </div>
+        )}
+
+        {/* Alert Sound Button - Available for all tests */}
+        <div className="mb-3">
+          <button
+            onClick={() => {
+              playAlertSound().then(() => {
+              }).catch(error => {
+                console.error('Failed to play alert sound:', error)
+              })
+            }}
+            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.01] group"
+          >
+            <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center group-hover:bg-opacity-30 transition-all duration-200">
+              <span className="text-xl">📢</span>
+            </div>
+            <span className="text-base font-bold tracking-wide">TingTong</span>
+          </button>
+        </div>
+
+        {/* Emergency Test Button */}
+        {!isEmergencyTestActive && (
+          <div className="mb-4">
+            <button
+              onClick={() => {
+                // Just trigger emergency test - audio will play from EmergencyTest component
+                triggerEmergencyTest()
+              }}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center space-x-2 shadow-lg"
+            >
+              <AlertCircle className="w-5 h-5" />
+              <span>🚨 TÌNH HUỐNG KHẨN CẤP</span>
+            </button>
+          </div>
+        )}
         
         {/* Secondary navigation */}
         <div className="flex justify-between items-center">
