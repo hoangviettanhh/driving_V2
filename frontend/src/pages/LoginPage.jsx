@@ -160,13 +160,13 @@ const LoginPage = () => {
         </div>
 
         {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-white/50 rounded-lg border border-white/20">
+        {/* <div className="mt-6 p-4 bg-white/50 rounded-lg border border-white/20">
           <p className="text-xs text-gray-600 text-center mb-2">Tài khoản demo:</p>
           <div className="text-xs text-gray-700 space-y-1">
             <p><strong>Username:</strong> admin</p>
             <p><strong>Password:</strong> 123456</p>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   )

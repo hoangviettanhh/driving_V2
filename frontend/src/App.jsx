@@ -15,10 +15,12 @@ import ScoreHistoryPage from './pages/ScoreHistoryPage'
 import SettingsPage from './pages/SettingsPage'
 import VoiceSettingsPage from './pages/VoiceSettingsPage'
 import UserManagementPage from './pages/UserManagementPage'
+import LessonListPage from './pages/LessonListPage'
 
 // Import layout components
 import Layout from './components/Layout/Layout'
 import ProtectedRoute from './components/Auth/ProtectedRoute'
+import TabNavigationWrapper from './components/TabNavigationWrapper'
 
 function App() {
   return (
@@ -43,10 +45,11 @@ function App() {
               <Route path="/tests" element={
                 <ProtectedRoute>
                   <Layout>
-                    <TestListPage />
+                    <TabNavigationWrapper />
                   </Layout>
                 </ProtectedRoute>
               } />
+              
               
               <Route path="/test/:testNumber" element={
                 <ProtectedRoute>

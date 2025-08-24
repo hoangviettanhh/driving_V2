@@ -40,6 +40,7 @@ const TestDetailPage = () => {
   const [isRecordingError, setIsRecordingError] = useState(false)
   const [localScore, setLocalScore] = useState(100) // Local score tracking
   const [detectedErrors, setDetectedErrors] = useState([]) // Local error tracking
+  const [isTransitioning, setIsTransitioning] = useState(false) // Smooth transition state
   
   // Timer states
   const [examStartTime, setExamStartTime] = useState(null) // When exam started
@@ -383,13 +384,17 @@ const TestDetailPage = () => {
     if (isProcessing) return
     
     setIsProcessing(true)
+    setIsTransitioning(true)
+    
     try {
       if (currentTestNumber < 11) {
-        // Move to next test
+        // Move to next test with smooth transition
         const result = await completeTest(currentTestNumber)
         if (result.success) {
-          navigate(`/test/${currentTestNumber + 1}`)
-          // No voice during transition - will speak when entering new test
+          // Add a small delay for smooth UX
+          setTimeout(() => {
+            navigate(`/test/${currentTestNumber + 1}`)
+          }, 300)
         }
       } else {
         // Complete final test and entire session
@@ -429,7 +434,10 @@ const TestDetailPage = () => {
       console.error('Error completing test:', error)
       alert('Đã xảy ra lỗi')
     } finally {
-      setIsProcessing(false)
+      setTimeout(() => {
+        setIsProcessing(false)
+        setIsTransitioning(false)
+      }, 500)
     }
   }
   
@@ -447,7 +455,9 @@ const TestDetailPage = () => {
       speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}. ${currentTest.description}`)
     } else {
       // Try lesson audio first, fallback to TTS
-      playLesson(currentTestNumber).catch(() => {
+      playLesson(currentTestNumber).then(() => {
+        // Success
+      }).catch((error) => {
         speak(`${currentTest.lesson_name}. ${currentTest.description}`)
       })
     }
@@ -490,30 +500,53 @@ const TestDetailPage = () => {
   
   // Ready phase - show test interface with errors
   return (
-    <div className="p-2 sm:p-3 space-y-3 sm:space-y-4 max-w-lg mx-auto pb-16">
+    <div className={`p-2 sm:p-3 space-y-3 sm:space-y-4 max-w-lg mx-auto pb-16 transition-all duration-300 ${
+      isTransitioning ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
+    }`}>
       {/* Header */}
       <div className="space-y-3 sm:space-y-4">
-        {/* Timer Display - COUNT UP */}
-        <div className={`text-center p-2 rounded-lg font-mono text-sm sm:text-base font-bold ${
-          timerInfo.isOvertime 
-            ? 'bg-red-100 text-red-700 border-2 border-red-300 animate-pulse' 
-            : 'bg-green-100 text-green-700 border-2 border-green-300'
-        }`}>
-          <div className="flex items-center justify-center space-x-2 text-sm sm:text-base">
-            <span>⏰</span>
-            <span>{timerInfo.display}</span>
-            <span className="text-xs sm:text-sm font-normal">/ 18:00</span>
-            {timerInfo.isOvertime && (
-              <span className="text-red-600 text-xs sm:text-sm">
-                {timerInfo.overtimeDisplay}
-              </span>
-            )}
-          </div>
-          {timerInfo.isOvertime && (
-            <div className="text-xs sm:text-sm mt-1 text-red-600 font-medium">
-              ⚠️ Quá giờ! Trừ 1 điểm mỗi 3 giây (Đã trừ: {overtimePenalties} điểm)
+        {/* Combined Timer & Score Display */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="grid grid-cols-2 divide-x divide-gray-200">
+            {/* Timer Section */}
+            <div className={`p-4 text-center ${
+              timerInfo.isOvertime 
+                ? 'bg-red-50 border-red-200' 
+                : 'bg-green-50 border-green-200'
+            }`}>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <span className="text-xl">⏰</span>
+                <span className="text-sm font-medium text-gray-600">Thời gian tổng</span>
+              </div>
+              <div className={`text-2xl font-bold font-mono ${
+                timerInfo.isOvertime ? 'text-red-700' : 'text-green-700'
+              }`}>
+                {timerInfo.display}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">/ 18:00 phút</div>
+              {timerInfo.isOvertime && (
+                <div className="text-xs text-red-600 font-medium mt-1">
+                  ⚠️ Quá {timerInfo.overtimeDisplay.replace('(Quá ', '').replace(')', '')} (-{overtimePenalties}đ)
+                </div>
+              )}
             </div>
-          )}
+            
+            {/* Score Section */}
+            <div className="p-4 text-center bg-blue-50">
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <span className="text-xl">🎯</span>
+                <span className="text-sm font-medium text-gray-600">Điểm tổng</span>
+              </div>
+              <div className={`text-2xl font-bold ${
+                localScore >= 80 ? 'text-green-700' : localScore >= 60 ? 'text-yellow-600' : 'text-red-700'
+              }`}>
+                {localScore}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {localScore >= 80 ? '✅ Đậu' : '❌ Rớt'} • {detectedErrors.length} lỗi
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="flex items-start justify-between">
@@ -561,27 +594,7 @@ const TestDetailPage = () => {
           </div>
         </div>
       </div>
-      
-      {/* Score Display - LOCAL VERSION */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card bg-primary-50 border-primary-200">
-          <div className="card-body text-center">
-            <div className="text-3xl font-bold text-primary-900 mb-1">
-              {localScore}
-            </div>
-            <div className="text-sm text-primary-700">Điểm hiện tại</div>
-          </div>
-        </div>
-        
-        <div className="card bg-orange-50 border-orange-200">
-          <div className="card-body text-center">
-            <div className="text-3xl font-bold text-orange-900 mb-1">
-              {detectedErrors.length}
-            </div>
-            <div className="text-sm text-orange-600">Lỗi đã phát hiện</div>
-          </div>
-        </div>
-      </div>
+
       
       {/* Student Info */}
       <div className="card">
@@ -596,20 +609,8 @@ const TestDetailPage = () => {
               )}
             </div>
             <div className="text-right">
-              <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                (currentSession?.totalScore || localScore) >= 80 ? 'bg-success-100 text-success-800' : 'bg-danger-100 text-danger-800'
-              }`}>
-                {(currentSession?.totalScore || localScore) >= 80 ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Đậu
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 mr-1" />
-                    Rớt
-                  </>
-                )}
+              <div className="text-sm text-gray-600">
+                Bài {currentTestNumber}/11 • {Math.round((currentTestNumber / 11) * 100)}% hoàn thành
               </div>
             </div>
           </div>
@@ -714,8 +715,8 @@ const TestDetailPage = () => {
           >
             {isProcessing ? (
               <div className="flex items-center">
-                <div className="loading-spinner mr-3"></div>
-                Đang xử lý...
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
+                {isTransitioning ? 'Chuyển bài...' : 'Đang xử lý...'}
               </div>
             ) : currentTestNumber === 11 ? (
               <>

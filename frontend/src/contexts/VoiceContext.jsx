@@ -9,7 +9,7 @@ const getAudioManager = () => {
     }
     return null
   } catch (e) {
-    console.warn('AudioManager not available:', e)
+    // Silently fail - this is expected during initial load
     return null
   }
 }
@@ -297,36 +297,20 @@ export const VoiceProvider = ({ children }) => {
     const audioKey = getAudioKeyForText(text)
     const audioManager = getAudioManager()
     
-    console.log('🔍 Debug info:', {
-      audioKey,
-      hasAudioManager: !!audioManager,
-      audioManagerEnabled: audioManager?.isEnabled,
-      text
-    })
-    
     if (audioKey && audioManager && audioManager.isEnabled) {
       try {
-        console.log('🎵 Attempting pre-recorded audio for:', text, 'key:', audioKey)
         await audioManager.play(audioKey, options)
-        console.log('✅ Pre-recorded audio played successfully')
         return
       } catch (error) {
         console.warn('❌ Audio playback failed, falling back to TTS:', error)
       }
-    } else {
-      console.log('🎤 No audio key found for text, using TTS:', text)
-      if (!audioKey) console.log('   - No audio key generated')
-      if (!audioManager) console.log('   - No audioManager available')
-      if (audioManager && !audioManager.isEnabled) console.log('   - AudioManager disabled')
     }
 
     // ResponsiveVoice disabled due to CORS issues
     // Using optimized Web Speech API instead
-    console.log('🎤 Using Web Speech API for:', text)
 
     // Fallback to Web Speech API
     if (!isSupported) {
-      console.log('❌ Web Speech API not supported')
       return Promise.resolve()
     }
 
@@ -350,10 +334,7 @@ export const VoiceProvider = ({ children }) => {
         utterance.volume = options.volume || volume
         utterance.lang = 'vi-VN' // Force Vietnamese language
         
-        // Debug logs for voice verification
-        console.log('🎤 Creating TTS utterance for:', text)
-        console.log('🎤 Speaking with voice:', voiceToUse?.name, `(${voiceToUse?.lang})`)
-        console.log('🎤 Settings - Rate:', utterance.rate, 'Pitch:', utterance.pitch, 'Volume:', utterance.volume)
+        // Debug logs for voice verification (removed for production)
         
         // Event handlers
         utterance.onstart = () => {
@@ -370,8 +351,6 @@ export const VoiceProvider = ({ children }) => {
           // Don't log common/expected errors
           if (event.error !== 'not-allowed' && event.error !== 'interrupted' && event.error !== 'canceled') {
             console.error('Speech synthesis error:', event.error)
-          } else if (event.error === 'interrupted') {
-            console.log('🔇 Speech interrupted (normal when clicking quickly)')
           }
           resolve() // Resolve instead of reject to prevent unhandled promise rejection
         }
@@ -459,20 +438,17 @@ export const VoiceProvider = ({ children }) => {
     
     // Debounce: only allow welcome message every 3 seconds
     if (now - lastWelcomeTimeRef.current < 3000) {
-      console.log('🎵 VoiceContext: speakWelcome blocked (debounce)', now - lastWelcomeTimeRef.current, 'ms ago')
       return Promise.resolve()
     }
     
     lastWelcomeTimeRef.current = now
     const text = `Xin chào ${instructorName}. Chào mừng đến với ứng dụng chấm điểm thi lái xe.`
-    console.log('🎵 VoiceContext: speakWelcome called for:', instructorName)
     return speak(text)
   }, [speak])
 
   // Get cute voices for voice selector - ALWAYS return custom Vietnamese voices
   // Helper function to map text to audio keys
   const getAudioKeyForText = useCallback((text) => {
-    console.log('🔍 getAudioKeyForText called with:', text)
     const lowerText = text.toLowerCase()
     
     // Map lesson numbers - FIXED regex to be more specific and avoid conflicts
@@ -480,14 +456,16 @@ export const VoiceProvider = ({ children }) => {
                        lowerText.match(/^(\d+)\.\s/) ||
                        lowerText.match(/^bài\s+tiếp\s+theo/i)
     
-    if (lessonMatch && !lowerText.includes('bánh xe') && !lowerText.includes('vô vệt')) {
+    if (lessonMatch) {
       const lessonNum = parseInt(lessonMatch[1])
       if (lessonNum >= 1 && lessonNum <= 11) {
-        console.log(`📚 Found lesson mapping: ${lessonNum}`)
-        return `lesson${lessonNum}`
+        // ONLY skip if this is clearly an error message, not a lesson title
+        const isErrorMessage = lowerText.includes('lỗi:') || lowerText.includes('trừ') || lowerText.includes('điểm')
+        
+        if (!isErrorMessage) {
+          return `lesson${lessonNum}`
+        }
       }
-    } else if (lessonMatch) {
-      console.log(`🚫 Skipped lesson mapping for: "${text}" (contains exclusion keywords)`)
     }
     
     // UPDATED: Thử tìm audio trực tiếp bằng tên lỗi từ database
@@ -495,10 +473,7 @@ export const VoiceProvider = ({ children }) => {
 
     
     if (audioManager && audioManager.audioFiles && audioManager.audioFiles[text]) {
-      console.log(`🎯 Found direct audio mapping for: "${text}"`)
       return text // Return exact text as key
-    } else {
-      console.log(`❌ No direct audio mapping found for: "${text}"`)
     }
     
     // Map common error phrases - UPDATED với các lỗi mới
@@ -530,7 +505,6 @@ export const VoiceProvider = ({ children }) => {
     // Thử exact match trước
     for (const [phrase, key] of Object.entries(errorMappings)) {
       if (text === phrase || lowerText === phrase.toLowerCase()) {
-        console.log(`🎯 Exact match found: "${phrase}" -> "${key}"`)
         return key
       }
     }
@@ -538,7 +512,6 @@ export const VoiceProvider = ({ children }) => {
     // Thử partial match
     for (const [phrase, key] of Object.entries(errorMappings)) {
       if (lowerText.includes(phrase.toLowerCase())) {
-        console.log(`🎯 Partial match found: "${phrase}" -> "${key}"`)
         return key
       }
     }
@@ -574,7 +547,7 @@ export const VoiceProvider = ({ children }) => {
       { name: 'Anh', lang: 'vi-VN', voiceURI: 'anh-vi-vn', localService: true, default: false, _originalVoice: baseVoice }
     ]
     
-    console.log('🇻🇳 Custom Vietnamese voices created:', customVietnameseVoices.map(v => v.name))
+    // Custom Vietnamese voices created
     return customVietnameseVoices
   }, [])
 
