@@ -117,7 +117,7 @@ const EmergencyTest = ({ onComplete, onError }) => {
   }
 
   return (
-    <div className={`min-h-screen relative overflow-hidden transition-all duration-700 ${
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-700 ${
       testCompleted 
         ? 'bg-gradient-to-br from-emerald-400 via-green-500 to-teal-600' 
         : emergencyActive 
@@ -125,104 +125,69 @@ const EmergencyTest = ({ onComplete, onError }) => {
           : 'bg-gradient-to-br from-red-500 via-red-600 to-rose-700'
     }`}>
       
-      {/* Modern animated background */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm"></div>
-        {!testCompleted && (
-          <div className="absolute inset-0">
-            <div className="absolute top-20 left-20 w-40 h-40 bg-white rounded-full opacity-10 animate-pulse"></div>
-            <div className="absolute bottom-32 right-16 w-32 h-32 bg-yellow-300 rounded-full opacity-15 animate-ping"></div>
-            <div className="absolute top-1/2 right-20 w-24 h-24 bg-white rounded-full opacity-10 animate-bounce"></div>
-            <div className="absolute top-40 right-40 w-16 h-16 bg-red-300 rounded-full opacity-20 animate-pulse"></div>
-            <div className="absolute bottom-20 left-40 w-20 h-20 bg-orange-300 rounded-full opacity-15 animate-ping"></div>
-          </div>
-        )}
-      </div>
-
-      {/* Main content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 text-center">
+      {/* Compact centered content */}
+      <div className="relative z-10 text-center p-6 max-w-sm mx-auto">
         
         {!testCompleted ? (
           <>
-            {/* Main alert icon with enhanced design */}
-            <div className="mb-8 relative">
-              <div className="w-36 h-36 bg-white bg-opacity-25 backdrop-blur-md rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-pulse">
-                <AlertTriangle className="w-20 h-20 text-white drop-shadow-lg" />
+            {/* Compact alert icon */}
+            <div className="mb-6 relative">
+              <div className="w-20 h-20 bg-white bg-opacity-25 backdrop-blur-md rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-pulse">
+                <AlertTriangle className="w-10 h-10 text-white drop-shadow-lg" />
               </div>
-              <div className="absolute -inset-6 border-4 border-white rounded-full opacity-40 animate-ping"></div>
-              <div className="absolute -inset-8 border-2 border-yellow-300 rounded-full opacity-30 animate-ping" style={{animationDelay: '0.5s'}}></div>
+              <div className="absolute -inset-3 border-2 border-white rounded-full opacity-40 animate-ping"></div>
             </div>
 
-            {/* Enhanced title section */}
-            <div className="mb-8 space-y-4">
-              <h1 className="text-6xl font-black text-white animate-pulse drop-shadow-2xl">
-                🚨 NGUY HIỂM! 🚨
+            {/* Compact title */}
+            <div className="mb-6">
+              <h1 className="text-3xl font-black text-white animate-pulse drop-shadow-2xl mb-2">
+                🚨 KHẨN CẤP! 🚨
               </h1>
-              <div className="bg-black bg-opacity-40 backdrop-blur-sm rounded-2xl px-6 py-4 border-2 border-yellow-400">
-                <h2 className="text-3xl font-bold text-yellow-300 mb-2">
-                  TÌNH HUỐNG KHẨN CẤP!
-                </h2>
-                <p className="text-xl text-white font-semibold">
-                  ⚡ XỬ LÝ NGAY LẬP TỨC! ⚡
-                </p>
-              </div>
+              <p className="text-lg text-yellow-300 font-bold">
+                XỬ LÝ NGAY LẬP TỨC!
+              </p>
             </div>
 
-            {/* Enhanced countdown */}
-            <div className="mb-8 relative">
-              <div className="w-24 h-24 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center text-4xl font-black text-white border-4 border-white animate-pulse shadow-2xl">
+            {/* Main countdown - LARGER AND PROMINENT */}
+            <div className="mb-6 relative">
+              <div className="w-32 h-32 bg-gradient-to-br from-red-500 to-red-700 rounded-full flex items-center justify-center text-6xl font-black text-white border-6 border-white animate-pulse shadow-2xl">
                 {timeLeft}
               </div>
-              <div className="absolute -inset-2 border-2 border-red-400 rounded-full opacity-50 animate-spin"></div>
-              <p className="text-white font-bold mt-3 text-lg">Thời gian còn lại</p>
+              <div className="absolute -inset-4 border-4 border-red-400 rounded-full opacity-50 animate-spin"></div>
+              <p className="text-white font-bold mt-3 text-lg">Giây</p>
             </div>
 
-            {/* Instructions */}
-            <div className="mb-8 bg-black bg-opacity-30 backdrop-blur-sm rounded-2xl p-6 border-2 border-yellow-400 max-w-sm">
-              <h3 className="text-yellow-400 font-bold text-xl mb-4">⚡ HÀNH ĐỘNG NGAY!</h3>
-              <div className="space-y-2 text-left text-white">
-                <p>1. BẤM NÚT ĐỎ NGAY LẬP TỨC!</p>
-                <p>2. Tiếng hú cảnh báo sẽ rất LOUD!</p>
-                <p>3. Chờ tiếng "TÍT" kết thúc</p>
-              </div>
-            </div>
-
-            {/* Enhanced emergency button */}
+            {/* Compact emergency button */}
             {!emergencyActive ? (
               <button
                 onClick={handleEmergencyButton}
-                className="w-72 h-20 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-4 border-white rounded-2xl text-white font-black text-xl shadow-2xl transform hover:scale-110 transition-all duration-300 animate-pulse relative overflow-hidden group"
+                className="w-64 h-16 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-4 border-white rounded-xl text-white font-black text-lg shadow-2xl transform hover:scale-105 transition-all duration-300 animate-pulse"
               >
-                <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
-                <span className="relative z-10 flex items-center justify-center">
-                  🚨 BẤM ĐỂ XỬ LÝ KHẨN CẤP 🚨
-                </span>
+                🚨 BẤM ĐỂ XỬ LÝ 🚨
               </button>
             ) : (
-              <div className="w-72 h-20 bg-gradient-to-r from-green-500 to-emerald-600 border-4 border-white rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-2xl animate-bounce">
+              <div className="w-64 h-16 bg-gradient-to-r from-green-500 to-emerald-600 border-4 border-white rounded-xl flex items-center justify-center text-white font-black text-lg shadow-2xl animate-bounce">
                 <div className="flex items-center space-x-3">
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   <span>✅ ĐANG XỬ LÝ...</span>
                 </div>
               </div>
             )}
           </>
         ) : (
-          /* Enhanced success state */
-          <div className="text-center space-y-8">
+          /* Compact success state */
+          <div className="text-center space-y-6">
             <div className="relative">
-              <div className="w-32 h-32 bg-white bg-opacity-25 backdrop-blur-md rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-bounce">
-                <CheckCircle className="w-16 h-16 text-white drop-shadow-lg" />
+              <div className="w-24 h-24 bg-white bg-opacity-25 backdrop-blur-md rounded-full flex items-center justify-center border-4 border-white shadow-2xl animate-bounce">
+                <CheckCircle className="w-12 h-12 text-white drop-shadow-lg" />
               </div>
-              <div className="absolute -inset-4 border-4 border-emerald-400 rounded-full opacity-60 animate-ping"></div>
+              <div className="absolute -inset-3 border-3 border-emerald-400 rounded-full opacity-60 animate-ping"></div>
             </div>
             
-            <div className="space-y-4">
-              <h1 className="text-5xl font-black text-white drop-shadow-2xl">🎉 HOÀN THÀNH! 🎉</h1>
-              <div className="bg-black bg-opacity-40 backdrop-blur-sm rounded-2xl px-6 py-4 border-2 border-emerald-400 max-w-md mx-auto">
-                <p className="text-2xl text-white font-bold mb-2">Tình huống khẩn cấp đã được xử lý thành công!</p>
-                <p className="text-lg text-emerald-100">Quay lại bài thi trong giây lát...</p>
-              </div>
+            <div className="space-y-3">
+              <h1 className="text-3xl font-black text-white drop-shadow-2xl">🎉 HOÀN THÀNH!</h1>
+              <p className="text-lg text-white font-bold">Xử lý thành công!</p>
+              <p className="text-sm text-emerald-100">Quay lại bài thi...</p>
             </div>
           </div>
         )}
