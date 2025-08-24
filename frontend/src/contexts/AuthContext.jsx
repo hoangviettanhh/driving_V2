@@ -11,8 +11,14 @@ export const useAuth = () => {
   return context
 }
 
-// Configure axios defaults
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+// Configure axios defaults - PRODUCTION SAFE
+const API_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.PROD 
+    ? 'https://backend-production-ffdc.up.railway.app/api'  // Production backend
+    : 'http://localhost:5001/api'  // Local development
+  )
+
+console.log('🔗 API URL:', API_URL)
 axios.defaults.baseURL = API_URL
 axios.defaults.headers.common['Accept'] = 'application/json; charset=utf-8'
 axios.defaults.headers.post['Content-Type'] = 'application/json; charset=utf-8'
