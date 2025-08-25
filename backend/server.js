@@ -75,6 +75,12 @@ const limiter = rateLimit({
   message: {
     success: false,
     error: { message: 'Too many requests, please try again later' }
+  },
+  // Fix trust proxy issue
+  trustProxy: true,
+  keyGenerator: (req) => {
+    // Use forwarded IP if available, otherwise use connection IP
+    return req.ip || req.connection.remoteAddress || 'unknown'
   }
 })
 // Only apply rate limiting in production
