@@ -19,7 +19,9 @@ const config = {
   DB_PASSWORD: process.env.DB_PASSWORD || 'driving_test_password',
   DB_NAME: process.env.DB_NAME || 'driving_test',
   JWT_SECRET: process.env.JWT_SECRET || 'driving_test_jwt_secret_key_2024',
-  CORS_ORIGIN: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3020', 'http://localhost:5173']
+  CORS_ORIGIN: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [
+    'https://frontend-production-947a.up.railway.app'
+  ]
 }
 
 // Database connection
