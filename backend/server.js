@@ -19,7 +19,7 @@ const config = {
   DB_PASSWORD: process.env.DB_PASSWORD || 'driving_test_password',
   DB_NAME: process.env.DB_NAME || 'driving_test',
   JWT_SECRET: process.env.JWT_SECRET || 'driving_test_jwt_secret_key_2024',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || ['http://localhost:3020', 'http://localhost:5173']
+  CORS_ORIGIN: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3020', 'http://localhost:5173']
 }
 
 // Database connection
@@ -51,13 +51,7 @@ app.set('trust proxy', true) // Trust proxy for correct IP detection
 app.use(helmet())
 app.use(compression())
 app.use(cors({
-  origin: [
-    'http://localhost:3020', 
-    'http://localhost:5173', 
-    'http://localhost:3000',
-    'https://frontend-production-947a.up.railway.app',
-    'https://driving.vn'
-  ],
+  origin: config.CORS_ORIGIN,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
@@ -879,6 +873,6 @@ app.use('*', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`)
-  console.log(`📱 Frontend URL: ${config.CORS_ORIGIN}`)
+  console.log(`📱 Frontend URLs: ${Array.isArray(config.CORS_ORIGIN) ? config.CORS_ORIGIN.join(', ') : config.CORS_ORIGIN}`)
   console.log(`🔧 Environment: ${config.NODE_ENV}`)
 })
