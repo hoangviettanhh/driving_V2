@@ -198,21 +198,19 @@ const LessonListPage = () => {
                         {lesson.lesson_number !== 12 && (
                           <div className="mt-4 pt-3 border-t border-gray-200">
                             <div className="grid grid-cols-2 gap-3">
-                              {/* Tút Button - Only for parking tests (lesson 7 and 10) */}
-                              {(lesson.lesson_number === 7 || lesson.lesson_number === 10) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    playTestBeep().catch(error => {
-                                      console.error('Failed to play test beep:', error)
-                                    })
-                                  }}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
-                                >
-                                  <span className="text-lg">🔔</span>
-                                  <span className="text-sm font-bold">Tút</span>
-                                </button>
-                              )}
+                              {/* Tút Button - Available for all 11 lessons */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  playTestBeep().catch(error => {
+                                    console.error('Failed to play test beep:', error)
+                                  })
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
+                              >
+                                <span className="text-lg">🔔</span>
+                                <span className="text-sm font-bold">Tút</span>
+                              </button>
                               
                               {/* TingTong Button - Available for all lessons */}
                               <button
@@ -222,9 +220,7 @@ const LessonListPage = () => {
                                     console.error('Failed to play alert sound:', error)
                                   })
                                 }}
-                                className={`bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group ${
-                                  (lesson.lesson_number === 7 || lesson.lesson_number === 10) ? '' : 'col-span-2'
-                                }`}
+                                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
                               >
                                 <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center group-hover:bg-opacity-30 transition-all duration-200">
                                   <span className="text-sm">📢</span>
@@ -243,21 +239,19 @@ const LessonListPage = () => {
                         {lesson.lesson_number !== 12 && (
                           <div className="pt-2 border-t border-gray-200">
                             <div className="grid grid-cols-2 gap-3">
-                              {/* Tút Button - Only for parking tests (lesson 7 and 10) */}
-                              {(lesson.lesson_number === 7 || lesson.lesson_number === 10) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    playTestBeep().catch(error => {
-                                      console.error('Failed to play test beep:', error)
-                                    })
-                                  }}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
-                                >
-                                  <span className="text-lg">🔔</span>
-                                  <span className="text-sm font-bold">Tút</span>
-                                </button>
-                              )}
+                              {/* Tút Button - Available for all 11 lessons */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  playTestBeep().catch(error => {
+                                    console.error('Failed to play test beep:', error)
+                                  })
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
+                              >
+                                <span className="text-lg">🔔</span>
+                                <span className="text-sm font-bold">Tút</span>
+                              </button>
                               
                               {/* TingTong Button - Available for all lessons */}
                               <button
@@ -267,9 +261,7 @@ const LessonListPage = () => {
                                     console.error('Failed to play alert sound:', error)
                                   })
                                 }}
-                                className={`bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group ${
-                                  (lesson.lesson_number === 7 || lesson.lesson_number === 10) ? '' : 'col-span-2'
-                                }`}
+                                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] group"
                               >
                                 <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center group-hover:bg-opacity-30 transition-all duration-200">
                                   <span className="text-sm">📢</span>

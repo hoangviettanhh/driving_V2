@@ -732,8 +732,8 @@ const TestDetailPage = () => {
           </button>
         </div>
         
-        {/* Special Buttons for Parking Tests */}
-        {(currentTestNumber === 7 || currentTestNumber === 10) && (
+        {/* Tút Button - Available for all 11 tests */}
+        {currentTestNumber <= 11 && (
           <div className="mb-4">
             <button
               onClick={() => {
@@ -750,7 +750,7 @@ const TestDetailPage = () => {
           </div>
         )}
 
-        {/* Alert Sound Button - Available for all tests */}
+        {/* TingTong Button - Available for all tests */}
         <div className="mb-3">
           <button
             onClick={() => {
