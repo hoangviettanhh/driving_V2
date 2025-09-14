@@ -24,29 +24,107 @@ const config = {
   ]
 }
 
-// Database connection
+// Database connection pool
 let db
-const connectDB = async () => {
+const createConnectionPool = () => {
+  return mysql.createPool({
+    host: config.DB_HOST,
+    user: config.DB_USER,
+    password: config.DB_PASSWORD,
+    database: config.DB_NAME,
+    port: 3306,
+    charset: 'utf8mb4',
+    timezone: '+00:00',
+    // Connection pool settings
+    connectionLimit: 10,
+    acquireTimeout: 60000,
+    timeout: 60000,
+    reconnect: true,
+    // Keep connection alive
+    keepAliveInitialDelay: 0,
+    enableKeepAlive: true,
+    // Handle connection errors
+    handleDisconnects: true,
+    // Additional stability settings
+    queueLimit: 0, // Unlimited queue
+    multipleStatements: false, // Security
+    dateStrings: false, // Use Date objects
+    supportBigNumbers: true,
+    bigNumberStrings: false
+  })
+}
+
+// Initialize database connection pool
+db = createConnectionPool()
+
+// Test connection
+const testConnection = async () => {
   try {
-    db = await mysql.createConnection({
-      host: config.DB_HOST,
-      user: config.DB_USER,
-      password: config.DB_PASSWORD,
-      database: config.DB_NAME,
-      port: 3306,
-      charset: 'utf8mb4',
-      timezone: '+00:00'
-    })
-    console.log('✅ MySQL Connected Successfully')
+    const connection = await db.getConnection()
+    await connection.ping()
+    connection.release()
+    console.log('✅ MySQL Pool Connected Successfully')
+    return true
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message)
-    // Retry connection after 5 seconds
-    setTimeout(connectDB, 5000)
+    console.error('❌ Database pool connection failed:', error.message)
+    return false
   }
 }
 
-// Initialize database connection
-connectDB()
+// Initialize and test connection
+testConnection().then(success => {
+  if (!success) {
+    // Retry every 5 seconds if connection fails
+    const retryInterval = setInterval(async () => {
+      const connected = await testConnection()
+      if (connected) {
+        clearInterval(retryInterval)
+      }
+    }, 5000)
+  }
+})
+
+// Helper function to execute database queries with auto-reconnect
+const executeQuery = async (query, params = []) => {
+  let retries = 3
+  let lastError = null
+  
+  while (retries > 0) {
+    try {
+      // Execute query directly - connection pool handles connection management
+      const result = await db.execute(query, params)
+      return result
+    } catch (error) {
+      lastError = error
+      console.error(`❌ Database query failed (${4-retries} retries left):`, error.message)
+      
+      // Check if it's a connection error
+      if (error.code === 'PROTOCOL_CONNECTION_LOST' || 
+          error.code === 'ECONNRESET' || 
+          error.message.includes('closed state') ||
+          error.message.includes('Connection lost')) {
+        
+        console.log('🔄 Attempting to reconnect to database...')
+        
+        // Recreate connection pool
+        try {
+          await db.end()
+        } catch (endError) {
+          console.log('Connection pool already closed')
+        }
+        
+        db = createConnectionPool()
+        
+        // Wait a bit before retry
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
+      retries--
+    }
+  }
+  
+  throw new Error(`Database query failed after 3 retries: ${lastError.message}`)
+}
 
 // Middleware
 app.set('trust proxy', true) // Trust proxy for correct IP detection
@@ -110,7 +188,7 @@ const authenticateToken = async (req, res, next) => {
     console.log('✅ Token decoded:', decoded)
     
     // Get user from database
-    const [users] = await db.execute(
+    const [users] = await executeQuery(
       'SELECT id, username, email, full_name, phone, role, active_token, is_active FROM users WHERE id = ? AND is_active = TRUE',
       [decoded.userId]
     )
@@ -207,20 +285,13 @@ app.get('/api/health', (req, res) => {
 // Create admin user (development only)
 app.post('/api/create-admin', async (req, res) => {
   try {
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: 'Database not connected' }
-      })
-    }
-
     // Delete existing admin
-    await db.execute('DELETE FROM users WHERE username = ?', ['admin'])
+    await executeQuery('DELETE FROM users WHERE username = ?', ['admin'])
 
     // Create new admin with simple password
     const hashedPassword = await bcrypt.hash('123456', 12)
     
-    const [result] = await db.execute(
+    const [result] = await executeQuery(
       'INSERT INTO users (username, email, password_hash, full_name, phone) VALUES (?, ?, ?, ?, ?)',
       ['admin', 'admin@drivingtest.com', hashedPassword, 'Quản trị viên', '0123456789']
     )
@@ -247,13 +318,7 @@ app.post('/api/create-admin', async (req, res) => {
 // Auth Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
-    // Check if database is connected
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: 'Database not connected' }
-      })
-    }
+    // Database connection is handled by executeQuery helper
 
     // Validate input
     const { error, value } = registerSchema.validate(req.body)
@@ -267,7 +332,7 @@ app.post('/api/auth/register', async (req, res) => {
     const { username, email, password, full_name, phone, role } = value
 
     // Check if user exists
-    const [existingUsers] = await db.execute(
+    const [existingUsers] = await executeQuery(
       'SELECT id FROM users WHERE username = ? OR email = ?',
       [username, email]
     )
@@ -283,7 +348,7 @@ app.post('/api/auth/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Create user
-    const [result] = await db.execute(
+    const [result] = await executeQuery(
       'INSERT INTO users (username, email, password_hash, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
       [username, email, hashedPassword, full_name, phone || null, role || 2]
     )
@@ -305,13 +370,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    // Check if database is connected
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: 'Database not connected' }
-      })
-    }
+    // Database connection is handled by executeQuery helper
 
     // Validate input
     const { error, value } = loginSchema.validate(req.body)
@@ -325,7 +384,7 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = value
 
     // Get user
-    const [users] = await db.execute(
+    const [users] = await executeQuery(
       'SELECT id, username, email, password_hash, full_name, phone, role, active_token, suspicious_activity_count, last_suspicious_attempt, is_flagged, is_active FROM users WHERE username = ?',
       [username]
     )
@@ -414,7 +473,7 @@ app.post('/api/auth/login', async (req, res) => {
             const newSuspiciousCount = (user.suspicious_activity_count || 0) + 1
             const shouldFlag = newSuspiciousCount >= 3 // Flag after 3 attempts
             
-            await db.execute(
+            await executeQuery(
               'UPDATE users SET suspicious_activity_count = ?, last_suspicious_attempt = NOW(), is_flagged = ? WHERE id = ?',
               [newSuspiciousCount, shouldFlag, user.id]
             )
@@ -433,7 +492,7 @@ app.post('/api/auth/login', async (req, res) => {
         } catch (tokenError) {
           // Token is invalid/expired, clear it and allow login
           console.log(`🔄 Clearing expired/invalid token for teacher ${user.username}`)
-          await db.execute(
+          await executeQuery(
             'UPDATE users SET active_token = NULL WHERE id = ?',
             [user.id]
           )
@@ -442,7 +501,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
 
       // Save new token to database
-      await db.execute(
+      await executeQuery(
         'UPDATE users SET active_token = ? WHERE id = ?',
         [token, user.id]
       )
@@ -482,7 +541,7 @@ app.post('/api/auth/logout', authenticateToken, async (req, res) => {
   try {
     // For teachers (role=2), clear active token
     if (req.user.role === 2) {
-      await db.execute(
+      await executeQuery(
         'UPDATE users SET active_token = NULL WHERE id = ?',
         [req.user.id]
       )
@@ -508,7 +567,7 @@ app.post('/api/admin/force-logout/:userId', authenticateToken, isAdmin, async (r
     const { userId } = req.params
     
     // Clear active token for the specified user
-    const [result] = await db.execute(
+    const [result] = await executeQuery(
       'UPDATE users SET active_token = NULL WHERE id = ? AND role = 2',
       [userId]
     )
@@ -538,7 +597,7 @@ app.post('/api/admin/force-logout/:userId', authenticateToken, isAdmin, async (r
 // Get users with suspicious activity (admin only)
 app.get('/api/admin/suspicious-users', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const [users] = await db.execute(`
+    const [users] = await executeQuery(`
       SELECT 
         id, username, full_name, email, phone, 
         suspicious_activity_count, last_suspicious_attempt, is_flagged,
@@ -566,7 +625,7 @@ app.post('/api/admin/reset-suspicious/:userId', authenticateToken, isAdmin, asyn
   try {
     const { userId } = req.params
     
-    const [result] = await db.execute(
+    const [result] = await executeQuery(
       'UPDATE users SET suspicious_activity_count = 0, last_suspicious_attempt = NULL, is_flagged = FALSE WHERE id = ? AND role = 2',
       [userId]
     )
@@ -596,7 +655,7 @@ app.post('/api/admin/reset-suspicious/:userId', authenticateToken, isAdmin, asyn
 // Get all users (admin only)
 app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const [users] = await db.execute(`
+    const [users] = await executeQuery(`
       SELECT 
         id, username, email, full_name, phone, role,
         suspicious_activity_count, last_suspicious_attempt, is_flagged, is_active,
@@ -628,7 +687,7 @@ app.post('/api/admin/toggle-user/:userId', authenticateToken, isAdmin, async (re
     const { userId } = req.params
     
     // Get current status
-    const [users] = await db.execute(
+    const [users] = await executeQuery(
       'SELECT id, username, is_active, role FROM users WHERE id = ?',
       [userId]
     )
@@ -652,7 +711,7 @@ app.post('/api/admin/toggle-user/:userId', authenticateToken, isAdmin, async (re
     }
     
     // Update status and clear active token if deactivating
-    await db.execute(
+    await executeQuery(
       'UPDATE users SET is_active = ?, active_token = ? WHERE id = ?',
       [newStatus, newStatus ? null : null, userId]
     )
@@ -675,15 +734,9 @@ app.post('/api/admin/toggle-user/:userId', authenticateToken, isAdmin, async (re
 // Test Routes
 app.get('/api/tests', authenticateToken, async (req, res) => {
   try {
-    // Check if database is connected
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: 'Database not connected' }
-      })
-    }
+    // Database connection is handled by executeQuery helper
 
-    const [tests] = await db.execute(
+    const [tests] = await executeQuery(
       'SELECT * FROM lessons WHERE is_active = TRUE ORDER BY lesson_number'
     )
 
@@ -712,12 +765,12 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       })
     }
 
-    const [result] = await db.execute(
+    const [result] = await executeQuery(
       'INSERT INTO sessions (instructor_id, student_name, student_id) VALUES (?, ?, ?)',
       [req.user.id, student_name, student_id || null]
     )
 
-    const [session] = await db.execute(
+    const [session] = await executeQuery(
       'SELECT * FROM sessions WHERE id = ?',
       [result.insertId]
     )
@@ -739,15 +792,9 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 
 app.get('/api/sessions', authenticateToken, async (req, res) => {
   try {
-    // Check if database is connected
-    if (!db) {
-      return res.status(500).json({
-        success: false,
-        error: { code: 'DB_ERROR', message: 'Database not connected' }
-      })
-    }
+    // Database connection is handled by executeQuery helper
 
-    const [sessions] = await db.execute(
+    const [sessions] = await executeQuery(
       'SELECT * FROM sessions WHERE instructor_id = ? ORDER BY started_at DESC LIMIT 50',
       [req.user.id]
     )
@@ -780,7 +827,7 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
     })
 
     // Verify session belongs to user
-    const [sessions] = await db.execute(
+    const [sessions] = await executeQuery(
       'SELECT id FROM sessions WHERE id = ? AND instructor_id = ?',
       [sessionId, req.user.id]
     )
@@ -815,7 +862,7 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
     updates.push('updated_at = NOW()')
     values.push(sessionId)
 
-    await db.execute(
+    await executeQuery(
       `UPDATE sessions SET ${updates.join(', ')} WHERE id = ?`,
       values
     )
@@ -823,11 +870,11 @@ app.put('/api/sessions/:id', authenticateToken, async (req, res) => {
     // Save test results if provided
     if (test_results && Array.isArray(test_results)) {
       // Delete existing results for this session
-      await db.execute('DELETE FROM results WHERE session_id = ?', [sessionId])
+      await executeQuery('DELETE FROM results WHERE session_id = ?', [sessionId])
 
       // Insert new results
       for (const result of test_results) {
-        await db.execute(
+        await executeQuery(
           'INSERT INTO results (session_id, lesson_number, lesson_name, errors_detected, points_deducted, is_disqualified) VALUES (?, ?, ?, ?, ?, ?)',
           [
             sessionId,
@@ -878,9 +925,45 @@ app.use('*', (req, res) => {
   })
 })
 
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`)
+  
+  try {
+    // Close database connection pool
+    if (db) {
+      await db.end()
+      console.log('✅ Database connection pool closed')
+    }
+    
+    console.log('✅ Graceful shutdown completed')
+    process.exit(0)
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error)
+    process.exit(1)
+  }
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error)
+  gracefulShutdown('UNCAUGHT_EXCEPTION')
+})
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason)
+  gracefulShutdown('UNHANDLED_REJECTION')
+})
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`📱 Frontend URLs: ${Array.isArray(config.CORS_ORIGIN) ? config.CORS_ORIGIN.join(', ') : config.CORS_ORIGIN}`)
   console.log(`🔧 Environment: ${config.NODE_ENV}`)
+  console.log(`💾 Database: ${config.DB_HOST}:3306/${config.DB_NAME}`)
 })
