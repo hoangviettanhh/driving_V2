@@ -22,6 +22,15 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, navigate])
 
+  // Check for auth messages from sessionStorage (token expired, etc.)
+  useEffect(() => {
+    const authMessage = sessionStorage.getItem('auth_message')
+    if (authMessage) {
+      setError(authMessage)
+      sessionStorage.removeItem('auth_message') // Clear after showing
+    }
+  }, [])
+
   const handleChange = (e) => {
     setFormData({
       ...formData,

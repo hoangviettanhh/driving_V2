@@ -23,6 +23,40 @@ axios.defaults.baseURL = API_URL
 axios.defaults.headers.common['Accept'] = 'application/json; charset=utf-8'
 axios.defaults.headers.post['Content-Type'] = 'application/json; charset=utf-8'
 
+// Axios response interceptor to handle token expiration globally
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle token expiration globally
+    if (error.response?.status === 401) {
+      const errorCode = error.response?.data?.error?.code
+      
+      if (errorCode === 'TOKEN_EXPIRED' || errorCode === 'INVALID_TOKEN' || errorCode === 'NO_TOKEN') {
+        console.log('🔒 Token expired/invalid - clearing auth and redirecting to login')
+        
+        // Clear local storage
+        localStorage.removeItem('driving_test_token')
+        delete axios.defaults.headers.common['Authorization']
+        
+        // Show user-friendly message before redirect
+        const message = errorCode === 'TOKEN_EXPIRED' 
+          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+          : 'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.'
+        
+        // Store message in sessionStorage to show on login page
+        sessionStorage.setItem('auth_message', message)
+        
+        // Redirect to login page
+        window.location.href = '/login'
+        
+        return Promise.reject(error)
+      }
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)

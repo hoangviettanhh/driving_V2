@@ -184,8 +184,44 @@ const authenticateToken = async (req, res, next) => {
     }
 
     console.log('🔍 JWT Secret:', config.JWT_SECRET ? 'exists' : 'missing')
-    const decoded = jwt.verify(token, config.JWT_SECRET)
-    console.log('✅ Token decoded:', decoded)
+    
+    let decoded
+    try {
+      decoded = jwt.verify(token, config.JWT_SECRET)
+      console.log('✅ Token decoded:', decoded)
+    } catch (jwtError) {
+      console.log('❌ JWT Error:', jwtError.name, jwtError.message)
+      
+      if (jwtError.name === 'TokenExpiredError') {
+        console.log('⏰ Token expired at:', jwtError.expiredAt)
+        return res.status(401).json({
+          success: false,
+          error: { 
+            code: 'TOKEN_EXPIRED', 
+            message: 'Token đã hết hạn. Vui lòng đăng nhập lại.',
+            expiredAt: jwtError.expiredAt
+          }
+        })
+      } else if (jwtError.name === 'JsonWebTokenError') {
+        console.log('🔒 Invalid token format')
+        return res.status(401).json({
+          success: false,
+          error: { 
+            code: 'INVALID_TOKEN', 
+            message: 'Token không hợp lệ. Vui lòng đăng nhập lại.' 
+          }
+        })
+      } else {
+        console.log('❌ Other JWT error:', jwtError.message)
+        return res.status(401).json({
+          success: false,
+          error: { 
+            code: 'TOKEN_ERROR', 
+            message: 'Lỗi xác thực token. Vui lòng đăng nhập lại.' 
+          }
+        })
+      }
+    }
     
     // Get user from database
     const [users] = await executeQuery(
@@ -219,9 +255,9 @@ const authenticateToken = async (req, res, next) => {
     next()
   } catch (error) {
     console.error('Auth error:', error)
-    return res.status(403).json({
+    return res.status(500).json({
       success: false,
-      error: { code: 'INVALID_TOKEN', message: 'Invalid access token' }
+      error: { code: 'AUTH_ERROR', message: 'Lỗi xác thực. Vui lòng thử lại.' }
     })
   }
 }
@@ -430,7 +466,7 @@ app.post('/api/auth/login', async (req, res) => {
     const deviceSignature = `${clientIP}-${deviceInfo}-${browserInfo}`
     const deviceFingerprint = Buffer.from(deviceSignature).toString('base64').slice(0, 30)
 
-    // Generate JWT
+    // Generate JWT with longer expiration for better UX
     const token = jwt.sign(
       { 
         userId: user.id, 
@@ -439,7 +475,7 @@ app.post('/api/auth/login', async (req, res) => {
         deviceFingerprint: deviceFingerprint
       },
       config.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // Extended to 30 days for better user experience
     )
 
     // For teachers (role=2), check single device login BEFORE allowing login
@@ -534,6 +570,91 @@ app.get('/api/auth/profile', authenticateToken, (req, res) => {
     success: true,
     data: req.user
   })
+})
+
+// Refresh token endpoint
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body
+    
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token required' }
+      })
+    }
+
+    // Verify refresh token (same as access token for simplicity)
+    let decoded
+    try {
+      decoded = jwt.verify(refreshToken, config.JWT_SECRET)
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: { 
+            code: 'REFRESH_TOKEN_EXPIRED', 
+            message: 'Refresh token đã hết hạn. Vui lòng đăng nhập lại.' 
+          }
+        })
+      }
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid refresh token' }
+      })
+    }
+
+    // Get user from database
+    const [users] = await executeQuery(
+      'SELECT id, username, email, full_name, phone, role, is_active FROM users WHERE id = ? AND is_active = TRUE',
+      [decoded.userId]
+    )
+
+    if (users.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User not found or inactive' }
+      })
+    }
+
+    const user = users[0]
+
+    // Generate new token
+    const newToken = jwt.sign(
+      { 
+        userId: user.id, 
+        username: user.username, 
+        role: user.role,
+        deviceFingerprint: decoded.deviceFingerprint // Keep same device fingerprint
+      },
+      config.JWT_SECRET,
+      { expiresIn: '30d' }
+    )
+
+    // Update active token for teachers
+    if (user.role === 2) {
+      await executeQuery(
+        'UPDATE users SET active_token = ? WHERE id = ?',
+        [newToken, user.id]
+      )
+    }
+
+    res.json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        token: newToken,
+        user
+      }
+    })
+
+  } catch (error) {
+    console.error('Refresh token error:', error)
+    res.status(500).json({
+      success: false,
+      error: { code: 'REFRESH_ERROR', message: 'Failed to refresh token' }
+    })
+  }
 })
 
 // Logout endpoint
