@@ -19,6 +19,11 @@ const API_URL = import.meta.env.VITE_API_URL ||
   )
 
 console.log('🔗 API URL:', API_URL)
+console.log('🌐 User Agent:', navigator.userAgent)
+console.log('🍪 Cookies enabled:', navigator.cookieEnabled)
+console.log('💾 localStorage available:', typeof(Storage) !== "undefined")
+console.log('📱 Browser:', navigator.userAgent.includes('CocCoc') ? 'Cốc Cốc' : 'Other')
+
 axios.defaults.baseURL = API_URL
 axios.defaults.headers.common['Accept'] = 'application/json; charset=utf-8'
 axios.defaults.headers.post['Content-Type'] = 'application/json; charset=utf-8'
@@ -34,8 +39,13 @@ axios.interceptors.response.use(
       if (errorCode === 'TOKEN_EXPIRED' || errorCode === 'INVALID_TOKEN' || errorCode === 'NO_TOKEN') {
         console.log('🔒 Token expired/invalid - clearing auth and redirecting to login')
         
-        // Clear local storage
-        localStorage.removeItem('driving_test_token')
+        // Clear both storages
+        try {
+          localStorage.removeItem('driving_test_token')
+        } catch (e) { console.warn('Could not clear localStorage:', e.message) }
+        try {
+          sessionStorage.removeItem('driving_test_token')
+        } catch (e) { console.warn('Could not clear sessionStorage:', e.message) }
         delete axios.defaults.headers.common['Authorization']
         
         // Show user-friendly message before redirect
@@ -69,8 +79,21 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const token = localStorage.getItem('driving_test_token')
-      console.log('🔍 Checking auth status, token:', token ? 'exists' : 'missing')
+      // Check if localStorage is available (for Cốc Cốc browser compatibility)
+      let token = null
+      try {
+        token = localStorage.getItem('driving_test_token')
+        console.log('🔍 localStorage available, token:', token ? 'exists' : 'missing')
+      } catch (localStorageError) {
+        console.warn('⚠️ localStorage not available:', localStorageError.message)
+        // Fallback to sessionStorage for Cốc Cốc browser
+        try {
+          token = sessionStorage.getItem('driving_test_token')
+          console.log('🔍 sessionStorage fallback, token:', token ? 'exists' : 'missing')
+        } catch (sessionStorageError) {
+          console.warn('⚠️ sessionStorage also not available:', sessionStorageError.message)
+        }
+      }
       
       if (token) {
         // Set token in axios headers
@@ -90,8 +113,13 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (profileError) {
           console.error('❌ Profile check failed:', profileError.response?.status, profileError.response?.data)
-          // Token invalid, clear it
-          localStorage.removeItem('driving_test_token')
+          // Token invalid, clear it from both storages
+          try {
+            localStorage.removeItem('driving_test_token')
+          } catch (e) { console.warn('Could not clear localStorage:', e.message) }
+          try {
+            sessionStorage.removeItem('driving_test_token')
+          } catch (e) { console.warn('Could not clear sessionStorage:', e.message) }
           delete axios.defaults.headers.common['Authorization']
           setUser(null)
           setIsAuthenticated(false)
@@ -124,8 +152,21 @@ export const AuthProvider = ({ children }) => {
       if (response.data.success) {
         const { token, user: userData } = response.data.data
         
-        // Store token
-        localStorage.setItem('driving_test_token', token)
+        // Store token in both localStorage and sessionStorage for Cốc Cốc compatibility
+        try {
+          localStorage.setItem('driving_test_token', token)
+          console.log('✅ Token saved to localStorage')
+        } catch (localStorageError) {
+          console.warn('⚠️ Could not save to localStorage:', localStorageError.message)
+        }
+        
+        try {
+          sessionStorage.setItem('driving_test_token', token)
+          console.log('✅ Token saved to sessionStorage')
+        } catch (sessionStorageError) {
+          console.warn('⚠️ Could not save to sessionStorage:', sessionStorageError.message)
+        }
+        
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
         
         // Update state
@@ -185,7 +226,12 @@ export const AuthProvider = ({ children }) => {
       console.warn('⚠️ Logout process error:', error.message)
     } finally {
       // Always clear local data regardless of API result
-      localStorage.removeItem('driving_test_token')
+      try {
+        localStorage.removeItem('driving_test_token')
+      } catch (e) { console.warn('Could not clear localStorage:', e.message) }
+      try {
+        sessionStorage.removeItem('driving_test_token')
+      } catch (e) { console.warn('Could not clear sessionStorage:', e.message) }
       delete axios.defaults.headers.common['Authorization']
       
       // Update state
