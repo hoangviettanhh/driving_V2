@@ -24,6 +24,24 @@ class AudioManager {
       lesson9: '11.mp3.mp3',          // Thay đổi số trên đường thẳng  
       lesson10: '12.mp3.mp3',         // Ghép xe ngang
       lesson11: '13.mp3.mp3',         // Kết thúc
+      lesson12: 'khancap.mp3',        // Tình huống khẩn cấp
+
+      // Complete new lesson set for TestListPage only (doesn't affect test session)
+      listLesson1: '1.mp3.mp3',       // Xuất phát
+      listLesson2: '3.mp3.mp3',       // Dừng xe nhường đường
+      listLesson3: '4.mp3.mp3',       // Dừng xe ngang dốc
+      listLesson4: 'vbxvvg.mp3',      // Qua vệt bánh xe
+      listLesson5: '7.mp3.mp3',       // Qua ngã tư có đèn tín hiệu (gốc)
+      listLesson6: '6.mp3.mp3',       // Đường vòng quanh co
+      listLesson7: '7.mp3.mp3',       // Qua ngã tư có đèn tín hiệu (duplicate 1)
+      listLesson8: '8.mp3.mp3',       // Ghép xe dọc
+      listLesson9: '7.mp3.mp3',       // Qua ngã tư có đèn tín hiệu (duplicate 2)
+      listLesson10: '16.mp3.mp3',     // Tạm dừng đường sắt
+      listLesson11: '11.mp3.mp3',     // Tăng tốc đường bằng
+      listLesson12: '12.mp3.mp3',     // Ghép xe ngang
+      listLesson13: '7.mp3.mp3',      // Qua ngã tư có đèn tín hiệu (duplicate 3)
+      listLesson14: '13.mp3.mp3',     // Kết thúc
+      listLesson15: 'khancap.mp3',    // Tình huống khẩn cấp
       
       // Âm thanh đặc biệt
       testBeep: '5.mp3.mp3',          // Tiếng tút nhận bài thi
@@ -112,7 +130,8 @@ class AudioManager {
     const filename = this.audioFiles[key]
     
     if (!filename) {
-      return Promise.resolve()
+      console.warn(`Audio file not found for key: ${key}`)
+      return Promise.reject(new Error(`Audio file not found for key: ${key}`))
     }
     
     // Special handling for AI voice fallback
@@ -268,9 +287,14 @@ class AudioManager {
   
   /**
    * Phát âm thanh bài thi
-   * @param {number} lessonNumber - Số bài thi (1-11)
+   * @param {number|string} lessonNumber - Số bài thi hoặc key trực tiếp
    */
   async playLesson(lessonNumber) {
+    // If it's already a key (like 'listLesson1'), use it directly
+    if (typeof lessonNumber === 'string' && lessonNumber.startsWith('listLesson')) {
+      return this.play(lessonNumber)
+    }
+    // Otherwise, use the original lesson key
     const key = `lesson${lessonNumber}`
     return this.play(key)
   }

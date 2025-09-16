@@ -183,6 +183,17 @@ const TestDetailPage = () => {
             }).catch(() => {
               setTestPhase('ready')
             })
+          } else if (currentTestNumber === 12) {
+            // Special handling for emergency test - play emergency sound directly
+            playEmergency().then(() => {
+              setTestPhase('ready')
+            }).catch((error) => {
+              speak(`Bài ${currentTestNumber}: ${currentTest.lesson_name}`).then(() => {
+                setTestPhase('ready')
+              }).catch(() => {
+                setTestPhase('ready')
+              })
+            })
           } else {
             // Try audio file first
             playLesson(currentTestNumber).then(() => {

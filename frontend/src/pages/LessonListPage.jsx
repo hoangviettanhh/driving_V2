@@ -19,7 +19,57 @@ const LessonListPage = () => {
       try {
         const response = await axios.get('/tests')
         if (response.data.success) {
-          setLessons(response.data.data)
+          // Create enhanced lesson list with injected traffic light tests
+          const enhancedLessons = []
+          let currentNumber = 1
+          
+          for (const lesson of response.data.data) {
+            // Add current lesson
+            enhancedLessons.push({
+              ...lesson,
+              lesson_number: currentNumber
+            })
+            currentNumber++
+            
+            // Add traffic light test after specific lessons
+            if (lesson.lesson_name === 'Đường vòng quanh co') {
+              enhancedLessons.push({
+                id: `traffic_light_${currentNumber}`,
+                lesson_number: currentNumber,
+                lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                description: 'Tuân thủ tín hiệu đèn giao thông',
+                time_limit: 180,
+                common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                is_duplicate: true
+              })
+              currentNumber++
+            } else if (lesson.lesson_name === 'Ghép xe dọc') {
+              enhancedLessons.push({
+                id: `traffic_light_${currentNumber}`,
+                lesson_number: currentNumber,
+                lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                description: 'Tuân thủ tín hiệu đèn giao thông',
+                time_limit: 180,
+                common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                is_duplicate: true
+              })
+              currentNumber++
+            } else if (lesson.lesson_name === 'Ghép xe ngang') {
+              enhancedLessons.push({
+                id: `traffic_light_${currentNumber}`,
+                lesson_number: currentNumber,
+                lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                description: 'Tuân thủ tín hiệu đèn giao thông',
+                time_limit: 180,
+                common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                is_duplicate: true
+              })
+              currentNumber++
+            }
+          }
+          
+          console.log('🔧 Enhanced lessons:', enhancedLessons.length, enhancedLessons.map(l => `${l.lesson_number}: ${l.lesson_name}`))
+          setLessons(enhancedLessons)
         }
       } catch (error) {
         console.error('Failed to load lessons:', error)
@@ -45,8 +95,12 @@ const LessonListPage = () => {
   // Play lesson audio
   const handlePlayLesson = async (lessonNumber, lessonName) => {
     try {
-      await playLesson(lessonNumber)
+      // Use listLesson keys for LessonListPage
+      const listKey = `listLesson${lessonNumber}`
+      console.log(`🔊 Playing lesson audio: ${listKey}`)
+      await playLesson(listKey)
     } catch (error) {
+      console.error(`❌ Error playing ${listKey}:`, error)
       // Fallback to AI voice
       speak(`Bài thi số ${lessonNumber}: ${lessonName}`)
     }
@@ -55,17 +109,8 @@ const LessonListPage = () => {
   // Play error audio
   const handlePlayError = async (errorText) => {
     try {
-      // Check if audio file exists for this error
-      const audioManager = window.__audioManager
-      const hasAudioFile = audioManager && audioManager.audioFiles && audioManager.audioFiles[errorText]
-      
-      if (hasAudioFile) {
-        // Try to play audio file
-        await playError(errorText)
-      } else {
-        // No audio file, use AI voice directly
-        speak(errorText)
-      }
+      // Use AI voice directly for error messages
+      speak(errorText)
     } catch (error) {
       // Fallback to AI voice if audio fails
       speak(errorText)

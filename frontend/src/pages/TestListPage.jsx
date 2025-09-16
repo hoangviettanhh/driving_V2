@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTestSession } from '../contexts/TestSessionContext'
 import { useVoice } from '../contexts/VoiceContext'
+import { useAudio } from '../hooks/useAudio'
 import { Play, Plus, User, Car, Trophy, Clock, Volume2, CheckCircle, Lock } from 'lucide-react'
 import LoadingCar from '../components/LoadingCar'
 import DrivingAnimation from '../components/DrivingAnimation'
@@ -21,6 +22,7 @@ const TestListPage = () => {
   } = useTestSession()
   
   const { speak } = useVoice()
+  const { playLesson, playEmergency } = useAudio()
   const navigate = useNavigate()
 
   // Load test definitions when component mounts
@@ -66,8 +68,20 @@ const TestListPage = () => {
   }
 
   const handleSpeakTest = (testNumber, testName) => {
-    speak(`Bài ${testNumber}: ${testName}`)
+    console.log(`🔊 Playing audio for lesson ${testNumber}: ${testName}`)
+    
+    // Use new listLesson keys for TestListPage only
+    const listKey = `listLesson${testNumber}`
+    console.log(`📚 Playing list lesson audio: ${listKey}`)
+    
+    playLesson(listKey).then(() => {
+      console.log(`✅ Successfully played: ${listKey}`)
+    }).catch((error) => {
+      console.error(`❌ Error playing ${listKey}:`, error)
+      speak(`Bài ${testNumber}: ${testName}`)
+    })
   }
+
 
   if (isLoading) {
     return (
@@ -174,9 +188,58 @@ const TestListPage = () => {
         <div className="space-y-3 sm:space-y-4">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 px-2">Danh sách bài thi</h2>
           
-          {testDefinitions
-            .filter(test => test.lesson_number <= 11) // Only show regular tests, not emergency
-            .map((test, index) => {
+          {(() => {
+            // Create enhanced test list with injected traffic light tests
+            const enhancedTests = []
+            let currentNumber = 1
+            
+            for (const test of testDefinitions) {
+              // Add current test
+              enhancedTests.push({
+                ...test,
+                lesson_number: currentNumber
+              })
+              currentNumber++
+              
+              // Add traffic light test after specific lessons
+              if (test.lesson_name === 'Đường vòng quanh co') {
+                enhancedTests.push({
+                  id: `traffic_light_${currentNumber}`,
+                  lesson_number: currentNumber,
+                  lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                  description: 'Tuân thủ tín hiệu đèn giao thông',
+                  time_limit: 180,
+                  common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                  is_duplicate: true
+                })
+                currentNumber++
+              } else if (test.lesson_name === 'Ghép xe dọc') {
+                enhancedTests.push({
+                  id: `traffic_light_${currentNumber}`,
+                  lesson_number: currentNumber,
+                  lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                  description: 'Tuân thủ tín hiệu đèn giao thông',
+                  time_limit: 180,
+                  common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                  is_duplicate: true
+                })
+                currentNumber++
+              } else if (test.lesson_name === 'Ghép xe ngang') {
+                enhancedTests.push({
+                  id: `traffic_light_${currentNumber}`,
+                  lesson_number: currentNumber,
+                  lesson_name: 'Qua ngã tư có đèn tín hiệu',
+                  description: 'Tuân thủ tín hiệu đèn giao thông',
+                  time_limit: 180,
+                  common_errors: '[{"type": "disqualification", "error": "Vượt đèn đỏ", "points": 100}]',
+                  is_duplicate: true
+                })
+                currentNumber++
+              }
+            }
+            
+            return enhancedTests
+          })().map((test, index) => {
               const isCurrentTest = currentSession && currentSession.currentTestNumber === test.lesson_number && !currentSession.isCompleted
               const isCompleted = currentSession && currentSession.currentTestNumber > test.lesson_number
               const isLocked = currentSession && (currentSession.currentTestNumber < test.lesson_number || currentSession.isCompleted)

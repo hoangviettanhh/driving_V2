@@ -75,8 +75,8 @@ export const useAudio = () => {
    * Phát âm thanh bài thi
    */
   const playLesson = useCallback(async (lessonNumber) => {
-    return play(`lesson${lessonNumber}`)
-  }, [play])
+    return audioManager.playLesson(lessonNumber)
+  }, [])
   
   /**
    * Phát âm thanh lỗi

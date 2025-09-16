@@ -15,7 +15,7 @@ export const useAuth = () => {
 const API_URL = import.meta.env.VITE_API_URL || 
   (import.meta.env.PROD 
     ? 'https://backend-production-ffdc.up.railway.app/api'  // Production backend
-    : 'http://localhost:5000/api'  // Local development - FIXED PORT
+    : 'http://localhost:5001/api'  // Local development - Docker port
   )
 
 console.log('🔗 API URL:', API_URL)

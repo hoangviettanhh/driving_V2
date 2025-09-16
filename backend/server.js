@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken'
 import Joi from 'joi'
 
 const app = express()
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 5001
 
 // Environment variables (since .env might be blocked)
 const config = {
@@ -20,7 +20,11 @@ const config = {
   DB_NAME: process.env.DB_NAME || 'driving_test',
   JWT_SECRET: process.env.JWT_SECRET || 'driving_test_jwt_secret_key_2024',
   CORS_ORIGIN: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [
-    'https://frontend-production-947a.up.railway.app'
+    'https://frontend-production-947a.up.railway.app',
+    'http://localhost:3020',  // Local development frontend
+    'http://localhost:3000',  // Alternative local port
+    'http://127.0.0.1:3020',  // Alternative localhost
+    'http://127.0.0.1:3000'   // Alternative localhost
   ]
 }
 
@@ -130,19 +134,54 @@ const executeQuery = async (query, params = []) => {
 app.set('trust proxy', true) // Trust proxy for correct IP detection
 app.use(helmet())
 app.use(compression())
+// CORS configuration - more permissive for local development
 app.use(cors({
-  origin: config.CORS_ORIGIN,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true)
+    
+    // Check if origin is in allowed list
+    if (config.CORS_ORIGIN.includes(origin)) {
+      return callback(null, true)
+    }
+    
+    // For development, be more permissive
+    if (config.NODE_ENV === 'development' && origin.includes('localhost')) {
+      return callback(null, true)
+    }
+    
+    callback(new Error('Not allowed by CORS'))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
   optionsSuccessStatus: 200
 }))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
-// Set charset for all responses
+// Set charset and CORS headers for all responses
 app.use((req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  
+  // Manual CORS headers for local development
+  if (config.NODE_ENV === 'development') {
+    const origin = req.headers.origin
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      res.header('Access-Control-Allow-Origin', origin)
+      res.header('Access-Control-Allow-Credentials', 'true')
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With')
+    }
+    
+    console.log('🌐 CORS Debug:', {
+      method: req.method,
+      origin: req.headers.origin,
+      allowedOrigins: config.CORS_ORIGIN,
+      isAllowed: config.CORS_ORIGIN.includes(req.headers.origin)
+    })
+  }
+  
   next()
 })
 
@@ -307,6 +346,15 @@ const registerSchema = Joi.object({
 })
 
 // Routes
+
+// Handle preflight requests explicitly
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With')
+  res.header('Access-Control-Allow-Credentials', 'true')
+  res.sendStatus(200)
+})
 
 // Health check
 app.get('/api/health', (req, res) => {
