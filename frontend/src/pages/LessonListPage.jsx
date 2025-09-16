@@ -240,7 +240,7 @@ const LessonListPage = () => {
                         ))}
                         
                         {/* Special Sound Buttons - Available for all lessons except emergency */}
-                        {lesson.lesson_number !== 12 && (
+                        {lesson.lesson_name !== 'Tình huống khẩn cấp' && (
                           <div className="mt-4 pt-3 border-t border-gray-200">
                             <div className="grid grid-cols-2 gap-3">
                               {/* Tút Button - Available for all 11 lessons */}
@@ -281,7 +281,7 @@ const LessonListPage = () => {
                         <p className="text-sm text-gray-500 italic">Không có lỗi nào được định nghĩa cho bài thi này.</p>
                         
                         {/* Special Sound Buttons - Even when no errors */}
-                        {lesson.lesson_number !== 12 && (
+                        {lesson.lesson_name !== 'Tình huống khẩn cấp' && (
                           <div className="pt-2 border-t border-gray-200">
                             <div className="grid grid-cols-2 gap-3">
                               {/* Tút Button - Available for all 11 lessons */}
